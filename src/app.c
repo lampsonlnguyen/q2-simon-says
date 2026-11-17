@@ -193,53 +193,116 @@ static void stroke(u32 *p,unsigned stride,int x0,int y0,int x1,int y1,int width,
     for(int i=0;i<=n;++i)
         disc(p,stride,x0+dx*i/n,y0+dy*i/n,width,c);
 }
-/* Outline triangle with rounded vertices: simple enough for a tiny cat icon. */
-static void ear(u32 *p,unsigned stride,int root,int tip,int other,u32 ink,u32 fill){
-    for(int y=152;y>=139;--y){
-        int k=152-y;
-        int l=root+(tip-root)*k/13;
-        int r=other+(tip-other)*k/13;
-        if(l>r){int t=l;l=r;r=t;}
-        box(p,stride,l,y,r-l+1,1,ink);
-        if(r-l>5)box(p,stride,l+3,y+2,r-l-5,1,fill);
-    }
-    stroke(p,stride,root,153,tip,139,2,ink);
-    stroke(p,stride,tip,139,other,154,2,ink);
+/* Three-point faceted polygons are tiny and avoid PNG assets or dependencies. */
+static int edge(int ax,int ay,int bx,int by,int x,int y){
+    return (x-ax)*(by-ay)-(y-ay)*(bx-ax);
 }
+static void triangle(u32 *p,unsigned stride,
+                     int ax,int ay,int bx,int by,int cx0,int cy0,u32 color){
+    int minx=ax<bx?ax:bx,maxx=ax>bx?ax:bx;
+    int miny=ay<by?ay:by,maxy=ay>by?ay:by;
+    if(cx0<minx)minx=cx0;
+    if(cx0>maxx)maxx=cx0;
+    if(cy0<miny)miny=cy0;
+    if(cy0>maxy)maxy=cy0;
+    int winding=edge(ax,ay,bx,by,cx0,cy0);
+    if(!winding)return;
+    for(int y=miny;y<=maxy;++y)
+        for(int x=minx;x<=maxx;++x){
+            int e0=edge(ax,ay,bx,by,x,y);
+            int e1=edge(bx,by,cx0,cy0,x,y);
+            int e2=edge(cx0,cy0,ax,ay,x,y);
+            if(winding>0?(e0>=0&&e1>=0&&e2>=0):(e0<=0&&e1<=0&&e2<=0))
+                dot(p,stride,x,y,color);
+        }
+}
+static void sparkle(u32 *p,unsigned stride,int x,int y,u32 color){
+    stroke(p,stride,x-3,y,x+3,y,0,color);
+    stroke(p,stride,x,y-3,x,y+3,0,color);
+    dot(p,stride,x,y,0xffffffffu);
+}
+/* Gray tabby holding a little faceted diamond, as in the approved mockup.
+ * All shapes are rasterized directly to the 375x320 framebuffer.
+ * The medallion is deliberately small enough to leave useful touch targets.
+ */
 static void cat(u32 *p,unsigned stride){
-    const u32 ink=0xff6b40eau,lavender=0xff8d48f5u;
-    const u32 white=0xfffffaf8u,pink=0xffffb7c7u;
-    const int x=187,y=177;
-    /* A soft circular hub separates all four pads. */
-    disc(p,stride,x,y,45,0xff292c37u);
-    disc(p,stride,x,y,41,0xfffbf9ffu);
-    /* Bicolor ear tips and oversized rounded head, inspired by the reference. */
-    ear(p,stride,162,165,180,ink,pink);
-    ear(p,stride,193,210,212,ink,pink);
-    oval(p,stride,187,175,31,26,ink);
-    oval(p,stride,187,174,28,23,white);
-    /* Dot eyes and a three-arc w mouth, rather than detailed facial features. */
-    disc(p,stride,176,174,3,lavender);
-    disc(p,stride,198,174,3,lavender);
-    stroke(p,stride,181,184,185,188,2,lavender);
-    stroke(p,stride,185,188,188,185,2,lavender);
-    stroke(p,stride,188,185,192,188,2,lavender);
-    stroke(p,stride,192,188,196,185,2,lavender);
-    /* Steve Jobs-style thinking posture: a tiny curled paw under the chin. */
-    oval(p,stride,206,193,11,12,ink);
-    oval(p,stride,205,192,9,10,white);
-    stroke(p,stride,201,186,202,190,1,lavender);
-    stroke(p,stride,205,185,207,189,1,lavender);
-    /* The resting front paw stays inside the circular center. */
-    oval(p,stride,175,201,14,7,ink);
-    oval(p,stride,175,200,12,5,white);
-    stroke(p,stride,176,198,177,201,1,lavender);
-    /* Cheek curves keep the cat friendly without expensive graphics assets. */
-    stroke(p,stride,161,186,168,193,1,ink);
-    stroke(p,stride,209,184,213,188,1,ink);
+    const u32 outline=0xff252630u, gray=0xffb7b2b0u;
+    const u32 stripe=0xff746e6cu, white=0xfffffaf8u;
+    const u32 pink=0xffffb0bcu, eye=0xff396d45u;
+    const u32 ice=0xffc8f2ffu, blue=0xff80ceeau;
+    /* Nested round medallion with a warm pastel interior. */
+    disc(p,stride,187,177,54,outline);
+    disc(p,stride,187,177,51,0xfff8edf6u);
+    disc(p,stride,187,177,46,0xfff5e8f2u);
+    /* Body and chest behind the head, with a resting left paw. */
+    oval(p,stride,181,202,29,18,outline);
+    oval(p,stride,181,201,26,16,gray);
+    oval(p,stride,191,203,15,14,white);
+    stroke(p,stride,160,200,167,205,2,stripe);
+    stroke(p,stride,163,207,170,210,2,stripe);
+    /* Ear triangles, outlined with contrasting pink inner ears. */
+    triangle(p,stride,157,161,157,135,180,152,outline);
+    triangle(p,stride,160,157,160,141,175,153,pink);
+    triangle(p,stride,194,150,214,137,213,165,outline);
+    triangle(p,stride,198,151,211,143,210,157,pink);
+    /* Large rounded gray face and white muzzle. */
+    oval(p,stride,184,171,33,27,outline);
+    oval(p,stride,184,170,30,24,gray);
+    oval(p,stride,197,185,19,12,white);
+    /* Six curved tabby streaks use short rounded strokes. */
+    stroke(p,stride,174,149,180,157,2,stripe);
+    stroke(p,stride,183,147,190,156,2,stripe);
+    stroke(p,stride,191,149,197,156,2,stripe);
+    stroke(p,stride,157,172,166,171,2,stripe);
+    stroke(p,stride,157,181,167,177,2,stripe);
+    stroke(p,stride,165,192,173,195,1,stripe);
+    /* Asymmetric eyes give a curious, thoughtful expression. */
+    oval(p,stride,180,174,8,10,outline);
+    oval(p,stride,180,174,6,8,eye);
+    oval(p,stride,204,172,5,8,outline);
+    oval(p,stride,204,172,3,6,eye);
+    disc(p,stride,182,170,2,white);
+    disc(p,stride,205,169,1,white);
+    /* Pink nose, two tiny mouth curves and whiskers. */
+    triangle(p,stride,194,183,202,183,198,189,pink);
+    stroke(p,stride,198,189,197,193,0,outline);
+    stroke(p,stride,197,193,193,195,1,outline);
+    stroke(p,stride,198,193,201,195,1,outline);
+    stroke(p,stride,192,186,178,184,0,white);
+    stroke(p,stride,192,190,178,191,0,white);
+    stroke(p,stride,206,186,220,183,0,white);
+    stroke(p,stride,206,191,220,191,0,white);
+    /* A diamond with six independently shaded facets. */
+    triangle(p,stride,176,194,185,187,210,192,outline);
+    triangle(p,stride,176,194,210,192,204,215,outline);
+    triangle(p,stride,176,194,185,190,192,198,ice);
+    triangle(p,stride,185,190,202,190,192,198,0xffedfcffu);
+    triangle(p,stride,202,190,210,194,192,198,blue);
+    triangle(p,stride,176,194,192,198,187,212,0xff93d9f4u);
+    triangle(p,stride,192,198,210,194,204,213,0xff65b7e4u);
+    triangle(p,stride,192,198,204,213,187,212,ice);
+    stroke(p,stride,176,194,185,187,0,outline);
+    stroke(p,stride,185,187,210,192,0,outline);
+    stroke(p,stride,210,192,204,215,0,outline);
+    stroke(p,stride,204,215,187,212,0,outline);
+    stroke(p,stride,187,212,176,194,0,outline);
+    /* One white paw tucked below the chin and wrapped around the gem. */
+    oval(p,stride,207,198,10,12,outline);
+    oval(p,stride,206,197,8,10,white);
+    stroke(p,stride,204,190,202,193,0,outline);
+    stroke(p,stride,209,191,207,194,0,outline);
+    /* The other paw rests naturally on the lower gem facet. */
+    oval(p,stride,177,211,13,7,outline);
+    oval(p,stride,177,210,11,5,white);
+    stroke(p,stride,178,208,179,212,0,outline);
+    sparkle(p,stride,172,190,blue);
+    sparkle(p,stride,214,211,0xffe4faffu);
 }
 static void render_pads(struct app *a,u32 *p,unsigned stride){
-    const u32 rim=0xff282b37u;
+    const u32 rim=0xff55505bu;
+    /* Cream surround and lavender border match the approved layout. */
+    rounded_rect(p,stride,BOARD_X-4,BOARD_Y-4,BOARD_SIZE+8,30,0xff514957u);
+    rounded_rect(p,stride,BOARD_X-2,BOARD_Y-2,BOARD_SIZE+4,28,0xfffff7f5u);
     /* Outer shell corners never clip a colored pad: each pad has its own radius. */
     rounded_rect(p,stride,BOARD_X,BOARD_Y,BOARD_SIZE,27,rim);
     for(int i=0;i<4;++i){

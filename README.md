@@ -22,7 +22,7 @@ Do not put the extracted directory under a second folder such as `q2-diamond-say
 
 ## New arcade effects
 
-- Four equal-sized rounded buttons inside a rounded-square case, using Q2 Orange, Champagne Gold, Black and Silver. The center cat is minimal line art with a paw supporting its chin (thinking pose).
+- Four equal-sized rounded buttons inside a rounded-square case, using Q2 Orange, Champagne Gold, Black and Silver. The center medallion contains an original gray tabby with green eyes, a white muzzle, pink ears, and a faceted blue diamond held between its paws, based on the approved design.
 - Animated color brightness, a glow halo and expanding ripple when a pad activates.
 - Gold particle burst and level-up overlay after every completed sequence. Round number is displayed together with its label.
 - Progress markers, plus progressively faster playback as the sequence grows.

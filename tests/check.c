@@ -20,7 +20,10 @@ int main(void){
  assert(app_input(&a,"k d 170")&&a.phase==PAUSED);
  assert(app_input(&a,"k d 170")&&a.phase==CELEBRATE);
  static u32 fb[WIDTH*HEIGHT];app_frame(&a,fb,HEIGHT,17);
- assert(fb[187*HEIGHT+HEIGHT-1-175]!=0xfff7f1e9u);
+ assert(fb[187*HEIGHT+HEIGHT-1-177]!=0xfff7f1e9u);
+ /* The hub contains a rendered cat, and each identical pad retains its color. */
+ assert(fb[180*HEIGHT+HEIGHT-1-174]!=0xfff5e8f2u);
+ assert(fb[139*HEIGHT+HEIGHT-1-129]!=fb[236*HEIGHT+HEIGHT-1-129]);
  /* The identical pads remain tappable near their edges while the cat is not. */
  a.phase=INPUT;a.entered=0;
  assert(!app_input(&a,"t d 187 177"));
