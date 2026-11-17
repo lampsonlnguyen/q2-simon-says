@@ -22,10 +22,10 @@ Do not put the extracted directory under a second folder such as `q2-diamond-say
 
 ## Controls
 
-- **Center:** start, select a highlighted pad, restart, resume.
+- **Center (press):** start, select a highlighted pad, restart, resume.
 - **Wheel:** cycle through the four pads.
-- **Touch:** tap a pad after the pattern finishes.
-- **Return:** pause/resume; from title or game-over, exit.
+- **Touch:** tap a color pad directly after the pattern finishes; touch-down activates immediately.
+- **Return (press):** pause/resume; from title or game-over, exit.
 
 Watch the sequence, then repeat it. Each successful round adds a color. Best score saves to `/mnt/mmc/.diamond-says/best` (if the SD card is writable). Maximum sequence length: 128.
 

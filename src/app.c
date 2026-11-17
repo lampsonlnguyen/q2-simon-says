@@ -53,39 +53,51 @@ static int number(const char **p){
     while(**p>='0'&&**p<='9'){if(v>1000)return 10000;v=v*10+*(*p)++-'0';}
     return neg?-v:v;
 }
+/* Q2 sends key-down and touch-down immediately; do not wait for release. */
 int app_input(struct app *a,const char *s){
     if(!s[0]||s[1]!=' ')return 0;
-    if(s[0]=='w'){const char *p=s+2;int value=number(&p);
-        if(value < -2000||value > 2000)return 0;
-        a->wheel-=value;int steps=a->wheel/WHEEL_STEP;a->wheel%=WHEEL_STEP;
-        if(a->phase==INPUT)a->selected=(a->selected+steps%4+4)%4;
+    if(s[0]=='w'){
+        const char *p=s+2;
+        int value=number(&p);
+        if(value < -2000 || value > 2000)return 0;
+        a->wheel-=value;
+        int steps=a->wheel/WHEEL_STEP;
+        a->wheel%=WHEEL_STEP;
+        if(a->phase==INPUT && steps)
+            a->selected=(a->selected+steps%4+4)%4;
         return steps!=0;
     }
     if(!s[2]||s[3]!=' ')return 0;
-    const char *p=s+4;int x=number(&p);
-    if(s[0]=='k'&&s[2]=='u'){
+    const char *p=s+4;
+    int x=number(&p);
+    if(s[0]=='k'){
+        if(s[2]!='d')return 0; /* ignore key-up to avoid repeated actions */
         if(x==CENTRE){action(a);return 1;}
-        if(x==RETURN){if(a->phase==PAUSED)a->phase=a->previous_phase;
+        if(x==RETURN){
+            if(a->phase==PAUSED)a->phase=a->previous_phase;
             else if(a->phase==READY||a->phase==LOST||a->phase==FINISHED)a->quit=1;
             else {a->previous_phase=a->phase;a->phase=PAUSED;}
-            return 1;}
+            return 1;
+        }
+        return 0;
     }
     if(s[0]=='t'){
+        if(s[2]!='d')return 0;
         int y=number(&p);
-        if(x<0||x>=WIDTH||y<0||y>=HEIGHT){a->touching=0;return 0;}
-        if(s[2]=='d'){a->touch_x=x;a->touch_y=y;a->touching=1;return 0;}
-        if(s[2]=='u'&&a->touching){
-            a->touching=0;
-            if(a->phase!=INPUT){action(a);return 1;}
-            if(x<67||x>=307||y<75||y>=251)return 0;
-            int col=(x>=190),row=(y>=164);
-            int initial=(a->touch_x>=190)+2*(a->touch_y>=164);
-            int pad=col+2*row;
-            if(initial==pad){choose(a,pad);return 1;}
+        if(x<0||x>=WIDTH||y<0||y>=HEIGHT)return 0;
+        if(a->phase!=INPUT){action(a);return 1;}
+        /* Match the two rows of pads painted at x=67/190, y=116/186. */
+        for(int pad=0;pad<4;++pad){
+            int px=67+(pad%2)*123, py=116+(pad/2)*70;
+            if(x>=px && x<px+111 && y>=py && y<py+58){
+                choose(a,pad);
+                return 1;
+            }
         }
     }
     return 0;
 }
+
 static void step(struct app *a,unsigned elapsed){
     if(a->phase!=SHOW && a->phase!=INPUT && a->phase!=LOST)return;
     if(elapsed>a->timer)elapsed=a->timer;
