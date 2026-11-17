@@ -178,14 +178,6 @@ static void oval(u32 *p,unsigned stride,int x,int y,int rx,int ry,u32 color){
             if(dx*dx*ry*ry+dy*dy*rx*rx<=rx*rx*ry*ry)
                 dot(p,stride,x+dx,y+dy,color);
 }
-static void segment(u32 *p,unsigned stride,int x0,int y0,int x1,int y1,u32 color){
-    int dx=x1-x0,dy=y1-y0;
-    int adx=dx<0?-dx:dx,ady=dy<0?-dy:dy;
-    int n=adx>ady?adx:ady;
-    if(!n){dot(p,stride,x0,y0,color);return;}
-    for(int i=0;i<=n;++i)
-        dot(p,stride,x0+dx*i/n,y0+dy*i/n,color);
-}
 /* Rounded-square background and four independently rounded, equal-sized pads. */
 static void rounded_rect(u32 *p,unsigned stride,int x,int y,int size,int radius,u32 color){
     for(int yy=y;yy<y+size;++yy)
