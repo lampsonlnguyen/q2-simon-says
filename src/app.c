@@ -7,7 +7,10 @@ enum { CENTRE=218,RETURN=170,WHEEL_STEP=13 };
 static const u32 colors[4]={0xfff07820u,0xffd9bd78u,0xff17191du,0xffaeb6c1u};
 static const u32 bright[4]={0xffffc078u,0xffffe5a4u,0xff7a8290u,0xfff5f8ffu};
 /* Quadrant order: top-left, top-right, bottom-right, bottom-left. */
-static const int cx[4]={132,243,243,132},cy[4]={130,130,218,218};
+/* Identical 90 x 90 pads on a symmetric 196 x 196 playfield. */
+enum { BOARD_X=89, BOARD_Y=79, BOARD_SIZE=196, PAD_SIZE=90, PAD_RADIUS=17 };
+static const int px[4]={94,191,191,94},py[4]={84,84,181,181};
+static const int cx[4]={139,236,236,139},cy[4]={129,129,226,226};
 static const unsigned char font[36][7]={
 {14,17,17,31,17,17,17},{30,17,17,30,17,17,30},{14,17,16,16,16,17,14},
 {30,17,17,17,17,17,30},{31,16,16,30,16,16,31},{31,16,16,30,16,16,16},
@@ -69,20 +72,23 @@ static int number(const char **p){
  return neg?-v:v;
 }
 /* Touch only the visible colored areas, never the cat or the dividers. */
-static int hit(int x,int y){
-    int left=74, top=83, right=301, bottom=267, corner=31;
-    if(x<left+5||x>=right-5||y<top+5||y>=bottom-5)return -1;
+/* The same rounded-rectangle mask is used for paint and touch. */
+static int rounded_hit(int x,int y,int left,int top,int size,int radius){
+    int rx=x-left,ry=y-top;
+    if(rx<0||ry<0||rx>=size||ry>=size)return 0;
     int dx=0,dy=0;
-    if(x<left+corner)dx=left+corner-x;
-    else if(x>=right-corner)dx=x-(right-corner-1);
-    if(y<top+corner)dy=top+corner-y;
-    else if(y>=bottom-corner)dy=y-(bottom-corner-1);
-    if(dx*dx+dy*dy>corner*corner)return -1;
-    dx=x-187;dy=y-175;
-    if(dx*dx+dy*dy<44*44)return -1;
-    if(x>=184&&x<=190)return -1;
-    if(y>=172&&y<=178)return -1;
-    return (y<175)?(x<187?0:1):(x<187?3:2);
+    if(rx<radius)dx=radius-1-rx;
+    else if(rx>=size-radius)dx=rx-(size-radius);
+    if(ry<radius)dy=radius-1-ry;
+    else if(ry>=size-radius)dy=ry-(size-radius);
+    return dx*dx+dy*dy<radius*radius;
+}
+static int hit(int x,int y){
+    int dx=x-187,dy=y-177;
+    if(dx*dx+dy*dy<=43*43)return -1;
+    for(int i=0;i<4;++i)
+        if(rounded_hit(x,y,px[i],py[i],PAD_SIZE,PAD_RADIUS))return i;
+    return -1;
 }
 
 int app_input(struct app *a,const char *s){
@@ -180,107 +186,91 @@ static void segment(u32 *p,unsigned stride,int x0,int y0,int x1,int y1,u32 color
     for(int i=0;i<=n;++i)
         dot(p,stride,x0+dx*i/n,y0+dy*i/n,color);
 }
-static void ears(u32 *p,unsigned stride,int x,int y,int side,u32 outer,u32 inside){
-    int tip=x+side*14;
-    for(int k=0;k<20;++k){
-        int half=2+k/2;
-        int center=tip+(x-tip)*k/20;
-        box(p,stride,center-half,y+k,2*half+1,1,outer);
+/* Rounded-square background and four independently rounded, equal-sized pads. */
+static void rounded_rect(u32 *p,unsigned stride,int x,int y,int size,int radius,u32 color){
+    for(int yy=y;yy<y+size;++yy)
+        for(int xx=x;xx<x+size;++xx)
+            if(rounded_hit(xx,yy,x,y,size,radius))
+                dot(p,stride,xx,yy,color);
+}
+static void stroke(u32 *p,unsigned stride,int x0,int y0,int x1,int y1,int width,u32 c){
+    int dx=x1-x0,dy=y1-y0;
+    int ax=dx<0?-dx:dx,ay=dy<0?-dy:dy;
+    int n=ax>ay?ax:ay;
+    if(!n){disc(p,stride,x0,y0,width,c);return;}
+    for(int i=0;i<=n;++i)
+        disc(p,stride,x0+dx*i/n,y0+dy*i/n,width,c);
+}
+/* Outline triangle with rounded vertices: simple enough for a tiny cat icon. */
+static void ear(u32 *p,unsigned stride,int root,int tip,int other,u32 ink,u32 fill){
+    for(int y=152;y>=139;--y){
+        int k=152-y;
+        int l=root+(tip-root)*k/13;
+        int r=other+(tip-other)*k/13;
+        if(l>r){int t=l;l=r;r=t;}
+        box(p,stride,l,y,r-l+1,1,ink);
+        if(r-l>5)box(p,stride,l+3,y+2,r-l-5,1,fill);
     }
-    for(int k=5;k<17;++k){
-        int half=(k-3)/3;
-        int center=tip+(x-tip)*k/20;
-        box(p,stride,center-half,y+k,2*half+1,1,inside);
-    }
+    stroke(p,stride,root,153,tip,139,2,ink);
+    stroke(p,stride,tip,139,other,154,2,ink);
 }
 static void cat(u32 *p,unsigned stride){
-    const u32 line=0xff242632u, fur=0xffb8b3b1u, pale=0xffeee9e4u;
-    const u32 pink=0xffffa9b2u, green=0xff739e72u;
-    /* Central charcoal hub gives the mascot space and separates all four pads. */
-    disc(p,stride,187,175,45,0xff292c35u);
-    disc(p,stride,187,175,41,0xff41424bu);
-    oval(p,stride,187,199,28,16,line);
-    oval(p,stride,187,198,25,13,fur);
-    ears(p,stride,170,137,-1,line,pink);
-    ears(p,stride,204,137, 1,line,pink);
-    oval(p,stride,187,174,31,30,line);
-    oval(p,stride,187,174,28,27,fur);
-    oval(p,stride,187,188,20,13,pale);
-    /* A few tabby stripes and bright, readable eyes at 375x320. */
-    segment(p,stride,181,148,178,155,0xff686462u);
-    segment(p,stride,188,146,188,153,0xff686462u);
-    segment(p,stride,196,149,199,156,0xff686462u);
-    segment(p,stride,163,171,170,174,0xff77716eu);
-    segment(p,stride,206,173,212,170,0xff77716eu);
-    oval(p,stride,177,172,8,10,line);
-    oval(p,stride,197,172,8,10,line);
-    oval(p,stride,177,172,6,8,green);
-    oval(p,stride,197,172,6,8,green);
-    disc(p,stride,178,173,3,0xff111b1cu);
-    disc(p,stride,198,173,3,0xff111b1cu);
-    disc(p,stride,179,169,2,0xffffffffu);
-    disc(p,stride,199,169,2,0xffffffffu);
-    oval(p,stride,187,185,5,3,pink);
-    segment(p,stride,187,187,187,191,line);
-    segment(p,stride,187,191,183,193,line);
-    segment(p,stride,187,191,191,193,line);
-    segment(p,stride,178,188,163,184,0xffe9e5dfu);
-    segment(p,stride,178,191,163,192,0xffe9e5dfu);
-    segment(p,stride,196,188,211,184,0xffe9e5dfu);
-    segment(p,stride,196,191,211,192,0xffe9e5dfu);
-    oval(p,stride,176,205,10,6,pale);
-    oval(p,stride,198,205,10,6,pale);
+    const u32 ink=0xff6b40eau,lavender=0xff8d48f5u;
+    const u32 white=0xfffffaf8u,pink=0xffffb7c7u;
+    const int x=187,y=177;
+    /* A soft circular hub separates all four pads. */
+    disc(p,stride,x,y,45,0xff292c37u);
+    disc(p,stride,x,y,41,0xfffbf9ffu);
+    /* Bicolor ear tips and oversized rounded head, inspired by the reference. */
+    ear(p,stride,162,165,180,ink,pink);
+    ear(p,stride,193,210,212,ink,pink);
+    oval(p,stride,187,175,31,26,ink);
+    oval(p,stride,187,174,28,23,white);
+    /* Dot eyes and a three-arc w mouth, rather than detailed facial features. */
+    disc(p,stride,176,174,3,lavender);
+    disc(p,stride,198,174,3,lavender);
+    stroke(p,stride,181,184,185,188,2,lavender);
+    stroke(p,stride,185,188,188,185,2,lavender);
+    stroke(p,stride,188,185,192,188,2,lavender);
+    stroke(p,stride,192,188,196,185,2,lavender);
+    /* Steve Jobs-style thinking posture: a tiny curled paw under the chin. */
+    oval(p,stride,206,193,11,12,ink);
+    oval(p,stride,205,192,9,10,white);
+    stroke(p,stride,201,186,202,190,1,lavender);
+    stroke(p,stride,205,185,207,189,1,lavender);
+    /* The resting front paw stays inside the circular center. */
+    oval(p,stride,175,201,14,7,ink);
+    oval(p,stride,175,200,12,5,white);
+    stroke(p,stride,176,198,177,201,1,lavender);
+    /* Cheek curves keep the cat friendly without expensive graphics assets. */
+    stroke(p,stride,161,186,168,193,1,ink);
+    stroke(p,stride,209,184,213,188,1,ink);
 }
-/* The four chunky, soft-corner buttons share a rounded-square silhouette.
- * Integer masks replace the former sharp diamond outlines.
- */
 static void render_pads(struct app *a,u32 *p,unsigned stride){
-    const int left=74,top=83,right=301,bottom=267,corner=32;
-    const u32 surround=0xff292c35u;
-    for(int y=top;y<bottom;++y){
-        for(int x=left;x<right;++x){
-            int dx=0,dy=0;
-            if(x<left+corner)dx=left+corner-x;
-            else if(x>=right-corner)dx=x-(right-corner-1);
-            if(y<top+corner)dy=top+corner-y;
-            else if(y>=bottom-corner)dy=y-(bottom-corner-1);
-            if(dx*dx+dy*dy>corner*corner)continue;
-            int i=(y<175)?(x<187?0:1):(x<187?3:2);
-            int inner= x<left+6||x>=right-6||y<top+6||y>=bottom-6;
-            int gap=(x>=183&&x<=191)||(y>=171&&y<=179);
-            int cdx=x-187,cdy=y-175;
-            int central=cdx*cdx+cdy*cdy<45*45;
-            if(inner||gap||central){dot(p,stride,x,y,surround);continue;}
-            unsigned shine=a->shine[i];
-            if(a->phase==INPUT&&a->selected==i&&shine<58)shine=58;
-            u32 color=mix(colors[i],bright[i],shine);
-            /* A gentle top-edge highlight gives the buttons some depth. */
-            if(y<cy[i]-18&&y>top+10)
-                color=mix(color,0xffffffffu,24+shine/9);
-            if(i==2||i==3){
-                if(y>bottom-24)color=mix(color,0xff12151cu,32);
+    const u32 rim=0xff282b37u;
+    /* Outer shell corners never clip a colored pad: each pad has its own radius. */
+    rounded_rect(p,stride,BOARD_X,BOARD_Y,BOARD_SIZE,27,rim);
+    for(int i=0;i<4;++i){
+        unsigned shine=a->shine[i];
+        if(a->phase==INPUT&&a->selected==i&&shine<60)shine=60;
+        u32 base=mix(colors[i],bright[i],shine);
+        rounded_rect(p,stride,px[i],py[i],PAD_SIZE,PAD_RADIUS,base);
+        /* Simple highlights within the pad itself, preserving uniform shape. */
+        for(int yy=py[i]+8;yy<py[i]+15;++yy)
+            for(int xx=px[i]+18;xx<px[i]+PAD_SIZE-18;++xx)
+                if(rounded_hit(xx,yy,px[i],py[i],PAD_SIZE,PAD_RADIUS))
+                    dot(p,stride,xx,yy,mix(base,0xffffffffu,38+shine/7));
+        if(a->ripple_pad==i&&a->ripple_age){
+            unsigned age=a->ripple_age;
+            int radius=14+(int)age/12;
+            u32 ring=mix(base,bright[i],170*(430-age)/430);
+            for(int xx=cx[i]-radius;xx<=cx[i]+radius;++xx){
+                int dx=xx-cx[i],v=radius*radius-dx*dx;
+                int dy=0;
+                while((dy+1)*(dy+1)<=v)++dy;
+                if(hit(xx,cy[i]-dy)==i)dot(p,stride,xx,cy[i]-dy,ring);
+                if(hit(xx,cy[i]+dy)==i)dot(p,stride,xx,cy[i]+dy,ring);
             }
-            dot(p,stride,x,y,color);
-        }
-    }
-    /* Restrained glow on the active quadrant, without jagged geometry. */
-    if(a->ripple_age&&a->ripple_pad>=0&&a->ripple_pad<4){
-        int i=a->ripple_pad;
-        unsigned age=a->ripple_age;
-        int radius=18+(int)age/13;
-        u32 glow=mix(colors[i],bright[i],200*(430-age)/430);
-        for(int k=0;k<72;++k){
-            /* Circle sampled with integer midpoint-free coordinates. */
-            int x=cx[i]-radius+k*radius/36;
-            int dd=x-cx[i];
-            int rr=radius*radius-dd*dd;
-            if(rr<0)continue;
-            int y=0;
-            while((y+1)*(y+1)<=rr)++y;
-            int yy=cy[i]-y;
-            if(hit(x,yy)==i)dot(p,stride,x,yy,glow);
-            yy=cy[i]+y;
-            if(hit(x,yy)==i)dot(p,stride,x,yy,glow);
         }
     }
     cat(p,stride);
