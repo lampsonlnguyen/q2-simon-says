@@ -12,6 +12,9 @@ __asm__(".text\n.set noreorder\n.globl sc\nsc:\n"
         "lw $4, 0($29)\naddiu $5, $29, 4\nli $8, -8\nand $29, $29, $8\naddiu $29, $29, -32\n"
         "jal q2_main\nnop\nmove $4, $2\nli $2, 4246\nsyscall\n1: b 1b\nnop\n.set reorder\n");
 
+#define SYS_fork 4002
+#define SYS_execve 4011
+#define SYS_wait4 4114
 #define SYS_read 4003
 #define SYS_write 4004
 #define SYS_open 4005
@@ -107,6 +110,38 @@ static void save_score(u32 best)
     sc(SYS_unlink, (long)SCORE_TEMP, 0, 0, 0, 0, 0);
 }
 
+/* Q2's built-in MCU key-click is the smallest sound effect available.
+ * Fork/exec outside the frame loop; no audio files, mixing or extra libraries.
+ * Collect finished children to avoid zombies. The MCU click has one pitch.
+ */
+static int sound_child = -1;
+static void sound_poll(void)
+{
+    if (sound_child > 0) {
+        long status = 0;
+        long done = sc(SYS_wait4, sound_child, (long)&status, 1, 0, 0, 0);
+        if (done == sound_child || done < 0)
+            sound_child = -1;
+    }
+}
+static void sound_play(int event)
+{
+    (void)event;
+    sound_poll();
+    if (sound_child > 0)
+        return; /* Do not queue overlapping shell processes. */
+    long child = sc(SYS_fork, 0, 0, 0, 0, 0, 0);
+    if (child == 0) {
+        char *const args[] = {"/bin/sh", "-c", "cmd_mcu write_str buzzer", 0};
+        char *const env[] = {"PATH=/usr/bin:/bin:/usr/sbin:/sbin", 0};
+        sc(SYS_execve, (long)args[0], (long)args, (long)env, 0, 0, 0);
+        sc(4246, 127, 0, 0, 0, 0, 0);
+        for (;;) {}
+    }
+    if (child > 0)
+        sound_child = (int)child;
+}
+
 static void copy_page(u32 *dst, const u32 *src, unsigned stride)
 {
     for (int x = 0; x < WIDTH; ++x)
@@ -171,6 +206,11 @@ int q2_main(void)
                     copy_page(memory + visible * stride, memory + page * stride, stride);
                 }
             }
+            if (app.sound_pending) {
+                sound_play(app.sound_event);
+                app.sound_pending = 0;
+            }
+            sound_poll();
             if (app.save_pending) {
                 save_score((u32)app.best);
                 app.save_pending = 0;
