@@ -16,7 +16,7 @@ int main(void){
  /* Wheel selects a pad; Center confirms the choice. */
  a.phase=INPUT;a.entered=0;a.selected=(int)((a.sequence[0]+1)%4);
  assert(app_input(&a,"w 13"));assert(a.selected==(int)a.sequence[0]);
- assert(app_input(&a,"k d 218"));assert(a.score==2);
+ assert(app_input(&a,"k d 218"));assert(a.phase==INPUT&&a.entered==1);
  /* A wrong selection ends the run. */
  a.phase=INPUT;a.entered=0;
  a.selected=(a.sequence[0]+1)%4;
