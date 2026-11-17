@@ -122,7 +122,8 @@ static void step(struct app *a,unsigned dt){
  if(a->timer>dt)a->timer-=dt;
 }
 static u32 mix(u32 a,u32 b,unsigned v){
- if(v>255)v=255;unsigned u=255-v;
+ if(v>255)v=255;
+ unsigned u=255-v;
  unsigned r=(((a>>16)&255)*u+((b>>16)&255)*v)/255;
  unsigned g=(((a>>8)&255)*u+((b>>8)&255)*v)/255;
  unsigned blue=((a&255)*u+(b&255)*v)/255;
@@ -144,7 +145,8 @@ static void label(u32 *p,unsigned st,const char *s,int y,int z,u32 c){
 static void numeral(u32 *p,unsigned st,unsigned v,int y,int z){
  char buf[4],rev[4];int n=0;
  do{rev[n++]=(char)('0'+v%10);v/=10;}while(v&&n<3);
- for(int i=0;i<n;++i)buf[i]=rev[n-1-i];buf[n]=0;
+ for(int i=0;i<n;++i)buf[i]=rev[n-1-i];
+ buf[n]=0;
  label(p,st,buf,y,z,0xfff0dfb5u);
 }
 static void diamond(u32 *p,unsigned st,int x,int y,int w,int h,u32 c){
@@ -183,7 +185,8 @@ static void render_pads(struct app *a,u32 *p,unsigned st){
  diamond(p,st,187,170,6,5,0xfff9e5b0u);
 }
 static void particles(struct app *a,u32 *p,unsigned st){
- if(!a->spark_age)return;unsigned age=850-a->spark_age;
+ if(!a->spark_age)return;
+ unsigned age=850-a->spark_age;
  for(int k=0;k<22;++k){
   unsigned seed=(unsigned)k*1664525u+1013904223u;
   int dx=(int)(seed%231)-115,dy=(int)((seed>>11)%151)-75;
@@ -207,7 +210,8 @@ void app_frame(struct app *a,u32 *p,unsigned st,unsigned ms){
  label(p,st,status,268,2,0xffe9dfc8u);
  unsigned done=a->phase==SHOW?a->shown:a->entered;
  unsigned slots=a->length<14?a->length:14;
- if(!slots)slots=1;int start=(WIDTH-(int)slots*12)/2;
+ if(!slots)slots=1;
+ int start=(WIDTH-(int)slots*12)/2;
  for(unsigned i=0;i<slots;++i){
   unsigned index=a->length<=14?i:i*a->length/slots;
   box(p,st,start+(int)i*12,292,7,5,index<done?0xffd9bd78u:0xff465165u);
