@@ -28,7 +28,10 @@ static unsigned rand32(struct app *a){a->rng^=a->rng<<13;a->rng^=a->rng>>17;a->r
 static void add(struct app *a){if(a->length<MAX_SEQUENCE)a->sequence[a->length++]=(unsigned char)(rand32(a)&3u);}
 static void signal(struct app *a,int s){if(a->sounds){a->sound_event=s;a->sound_pending=1;}}
 static void pulse(struct app *a,int n){a->shine[n]=255;a->ripple_pad=n;a->ripple_age=1;signal(a,n+1);}
-static unsigned tempo(struct app *a){unsigned t=460-a->length*12;return t<170?170:t;}
+static unsigned tempo(struct app *a){
+    if(a->length>=24)return 170;
+    return 460-a->length*12;
+}
 static void begin(struct app *a){
  a->rng^=a->tick+0x9e3779b9u;if(!a->rng)a->rng=0x12345678u;
  a->length=a->shown=a->entered=a->score=0;a->selected=0;a->lit=-1;
@@ -153,14 +156,6 @@ static void label(u32 *p,unsigned st,const char *s,int y,int z,u32 c){
    if(font[g][r]&(16u>>col))box(p,st,x+col*z,y+r*z,z,z,c);
  }
 }
-static void numeral(u32 *p,unsigned st,unsigned v,int y,int z){
- char buf[4],rev[4];int n=0;
- do{rev[n++]=(char)('0'+v%10);v/=10;}while(v&&n<3);
- for(int i=0;i<n;++i)buf[i]=rev[n-1-i];
- buf[n]=0;
- label(p,st,buf,y,z,0xfff0dfb5u);
-}
-/* Small integer drawing helpers: no PNG decoder or heap allocation. */
 static void dot(u32 *p,unsigned stride,int x,int y,u32 color){
     if(x>=0&&x<WIDTH&&y>=0&&y<HEIGHT)
         p[x*stride+HEIGHT-1-y]=color;
