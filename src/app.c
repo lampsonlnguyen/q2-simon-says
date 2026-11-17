@@ -6,7 +6,8 @@
 enum { CENTRE=218,RETURN=170,WHEEL_STEP=13 };
 static const u32 colors[4]={0xfff07820u,0xffd9bd78u,0xff17191du,0xffaeb6c1u};
 static const u32 bright[4]={0xffffc078u,0xffffe5a4u,0xff7a8290u,0xfff5f8ffu};
-static const int cx[4]={187,257,187,117},cy[4]={110,173,236,173};
+/* Quadrant order: top-left, top-right, bottom-right, bottom-left. */
+static const int cx[4]={132,243,243,132},cy[4]={130,130,218,218};
 static const unsigned char font[36][7]={
 {14,17,17,31,17,17,17},{30,17,17,30,17,17,30},{14,17,16,16,16,17,14},
 {30,17,17,17,17,17,30},{31,16,16,30,16,16,31},{31,16,16,30,16,16,16},
@@ -64,13 +65,23 @@ static int number(const char **p){
  while(**p>='0'&&**p<='9'){if(v>1000)return 10000;v=v*10+*(*p)++-'0';}
  return neg?-v:v;
 }
+/* Touch only the visible colored areas, never the cat or the dividers. */
 static int hit(int x,int y){
- for(int i=0;i<4;++i){
-  int dx=x-cx[i],dy=y-cy[i];if(dx<0)dx=-dx;if(dy<0)dy=-dy;
-  if(dx*39+dy*49<=49*39)return i;
- }
- return -1;
+    int left=74, top=83, right=301, bottom=267, corner=31;
+    if(x<left+5||x>=right-5||y<top+5||y>=bottom-5)return -1;
+    int dx=0,dy=0;
+    if(x<left+corner)dx=left+corner-x;
+    else if(x>=right-corner)dx=x-(right-corner-1);
+    if(y<top+corner)dy=top+corner-y;
+    else if(y>=bottom-corner)dy=y-(bottom-corner-1);
+    if(dx*dx+dy*dy>corner*corner)return -1;
+    dx=x-187;dy=y-175;
+    if(dx*dx+dy*dy<44*44)return -1;
+    if(x>=184&&x<=190)return -1;
+    if(y>=172&&y<=178)return -1;
+    return (y<175)?(x<187?0:1):(x<187?3:2);
 }
+
 int app_input(struct app *a,const char *s){
  if(!s[0]||s[1]!=' ')return 0;
  if(s[0]=='w'){
@@ -95,7 +106,7 @@ int app_input(struct app *a,const char *s){
  }
  if(s[0]=='t'&&s[2]=='d'){
   int y=number(&p);if(x<0||x>=WIDTH||y<0||y>=HEIGHT)return 0;
-  if(x>=305&&y<65){a->sounds=!a->sounds;return 1;}
+  if(y>=299){a->sounds=!a->sounds;return 1;}
   if(a->phase!=INPUT){action(a);return 1;}
   int n=hit(x,y);if(n>=0){choose(a,n);return 1;}
  }
@@ -149,41 +160,137 @@ static void numeral(u32 *p,unsigned st,unsigned v,int y,int z){
  buf[n]=0;
  label(p,st,buf,y,z,0xfff0dfb5u);
 }
-static void diamond(u32 *p,unsigned st,int x,int y,int w,int h,u32 c){
- for(int dy=-h;dy<=h;++dy){
-  int ad=dy<0?-dy:dy,half=w*(h-ad)/h;
-  box(p,st,x-half,y+dy,2*half+1,1,c);
- }
+/* Small integer drawing helpers: no PNG decoder or heap allocation. */
+static void dot(u32 *p,unsigned stride,int x,int y,u32 color){
+    if(x>=0&&x<WIDTH&&y>=0&&y<HEIGHT)
+        p[x*stride+HEIGHT-1-y]=color;
 }
-static void render_pads(struct app *a,u32 *p,unsigned st){
- for(int i=0;i<4;++i){
-  unsigned f=a->shine[i];
-  if(a->phase==INPUT&&a->selected==i&&f<65)f=65;
-  u32 base=mix(colors[i],bright[i],f);
-  diamond(p,st,cx[i],cy[i],56,47,mix(0xff0e121au,bright[i],18+f/3));
-  diamond(p,st,cx[i],cy[i],50,41,0xff505a6bu);
-  diamond(p,st,cx[i],cy[i],46,37,base);
-  for(int k=2;k<17;++k)box(p,st,cx[i]-k,cy[i]-29+k/3,2*k+1,1,
-                          mix(base,0xffffffffu,18+f/5));
-  if(a->ripple_pad==i&&a->ripple_age){
-   int w=50+(int)a->ripple_age/19,h=42+(int)a->ripple_age/25;
-   if(w<74&&h<63){
-    u32 line=mix(0xff0e121au,bright[i],170*(430-a->ripple_age)/430);
-    for(int dy=-h;dy<=h;dy+=2){
-     int ad=dy<0?-dy:dy,dx=w*(h-ad)/h;
-     if(cx[i]-dx>0&&cx[i]+dx<WIDTH&&cy[i]+dy>0&&cy[i]+dy<HEIGHT){
-      box(p,st,cx[i]-dx,cy[i]+dy,2,2,line);
-      box(p,st,cx[i]+dx-1,cy[i]+dy,2,2,line);
-     }
+static void disc(u32 *p,unsigned stride,int x,int y,int radius,u32 color){
+    for(int dy=-radius;dy<=radius;++dy)
+        for(int dx=-radius;dx<=radius;++dx)
+            if(dx*dx+dy*dy<=radius*radius)
+                dot(p,stride,x+dx,y+dy,color);
+}
+static void oval(u32 *p,unsigned stride,int x,int y,int rx,int ry,u32 color){
+    for(int dy=-ry;dy<=ry;++dy)
+        for(int dx=-rx;dx<=rx;++dx)
+            if(dx*dx*ry*ry+dy*dy*rx*rx<=rx*rx*ry*ry)
+                dot(p,stride,x+dx,y+dy,color);
+}
+static void segment(u32 *p,unsigned stride,int x0,int y0,int x1,int y1,u32 color){
+    int dx=x1-x0,dy=y1-y0;
+    int adx=dx<0?-dx:dx,ady=dy<0?-dy:dy;
+    int n=adx>ady?adx:ady;
+    if(!n){dot(p,stride,x0,y0,color);return;}
+    for(int i=0;i<=n;++i)
+        dot(p,stride,x0+dx*i/n,y0+dy*i/n,color);
+}
+static void ears(u32 *p,unsigned stride,int x,int y,int side,u32 outer,u32 inside){
+    int tip=x+side*14;
+    for(int k=0;k<20;++k){
+        int half=2+k/2;
+        int center=tip+(x-tip)*k/20;
+        box(p,stride,center-half,y+k,2*half+1,1,outer);
     }
-   }
-  }
- }
- diamond(p,st,187,173,25,22,0xffd9bd78u);
- diamond(p,st,187,173,20,17,0xff1e2838u);
- diamond(p,st,187,172,12,11,0xff52617bu);
- diamond(p,st,187,170,6,5,0xfff9e5b0u);
+    for(int k=5;k<17;++k){
+        int half=(k-3)/3;
+        int center=tip+(x-tip)*k/20;
+        box(p,stride,center-half,y+k,2*half+1,1,inside);
+    }
 }
+static void cat(u32 *p,unsigned stride){
+    const u32 line=0xff242632u, fur=0xffb8b3b1u, pale=0xffeee9e4u;
+    const u32 pink=0xffffa9b2u, green=0xff739e72u;
+    /* Central charcoal hub gives the mascot space and separates all four pads. */
+    disc(p,stride,187,175,45,0xff292c35u);
+    disc(p,stride,187,175,41,0xff41424bu);
+    oval(p,stride,187,199,28,16,line);
+    oval(p,stride,187,198,25,13,fur);
+    ears(p,stride,170,137,-1,line,pink);
+    ears(p,stride,204,137, 1,line,pink);
+    oval(p,stride,187,174,31,30,line);
+    oval(p,stride,187,174,28,27,fur);
+    oval(p,stride,187,188,20,13,pale);
+    /* A few tabby stripes and bright, readable eyes at 375x320. */
+    segment(p,stride,181,148,178,155,0xff686462u);
+    segment(p,stride,188,146,188,153,0xff686462u);
+    segment(p,stride,196,149,199,156,0xff686462u);
+    segment(p,stride,163,171,170,174,0xff77716eu);
+    segment(p,stride,206,173,212,170,0xff77716eu);
+    oval(p,stride,177,172,8,10,line);
+    oval(p,stride,197,172,8,10,line);
+    oval(p,stride,177,172,6,8,green);
+    oval(p,stride,197,172,6,8,green);
+    disc(p,stride,178,173,3,0xff111b1cu);
+    disc(p,stride,198,173,3,0xff111b1cu);
+    disc(p,stride,179,169,2,0xffffffffu);
+    disc(p,stride,199,169,2,0xffffffffu);
+    oval(p,stride,187,185,5,3,pink);
+    segment(p,stride,187,187,187,191,line);
+    segment(p,stride,187,191,183,193,line);
+    segment(p,stride,187,191,191,193,line);
+    segment(p,stride,178,188,163,184,0xffe9e5dfu);
+    segment(p,stride,178,191,163,192,0xffe9e5dfu);
+    segment(p,stride,196,188,211,184,0xffe9e5dfu);
+    segment(p,stride,196,191,211,192,0xffe9e5dfu);
+    oval(p,stride,176,205,10,6,pale);
+    oval(p,stride,198,205,10,6,pale);
+}
+/* The four chunky, soft-corner buttons share a rounded-square silhouette.
+ * Integer masks replace the former sharp diamond outlines.
+ */
+static void render_pads(struct app *a,u32 *p,unsigned stride){
+    const int left=74,top=83,right=301,bottom=267,corner=32;
+    const u32 surround=0xff292c35u;
+    for(int y=top;y<bottom;++y){
+        for(int x=left;x<right;++x){
+            int dx=0,dy=0;
+            if(x<left+corner)dx=left+corner-x;
+            else if(x>=right-corner)dx=x-(right-corner-1);
+            if(y<top+corner)dy=top+corner-y;
+            else if(y>=bottom-corner)dy=y-(bottom-corner-1);
+            if(dx*dx+dy*dy>corner*corner)continue;
+            int i=(y<175)?(x<187?0:1):(x<187?3:2);
+            int inner= x<left+6||x>=right-6||y<top+6||y>=bottom-6;
+            int gap=(x>=183&&x<=191)||(y>=171&&y<=179);
+            int cdx=x-187,cdy=y-175;
+            int central=cdx*cdx+cdy*cdy<45*45;
+            if(inner||gap||central){dot(p,stride,x,y,surround);continue;}
+            unsigned shine=a->shine[i];
+            if(a->phase==INPUT&&a->selected==i&&shine<58)shine=58;
+            u32 color=mix(colors[i],bright[i],shine);
+            /* A gentle top-edge highlight gives the buttons some depth. */
+            if(y<cy[i]-18&&y>top+10)
+                color=mix(color,0xffffffffu,24+shine/9);
+            if(i==2||i==3){
+                if(y>bottom-24)color=mix(color,0xff12151cu,32);
+            }
+            dot(p,stride,x,y,color);
+        }
+    }
+    /* Restrained glow on the active quadrant, without jagged geometry. */
+    if(a->ripple_age&&a->ripple_pad>=0&&a->ripple_pad<4){
+        int i=a->ripple_pad;
+        unsigned age=a->ripple_age;
+        int radius=18+(int)age/13;
+        u32 glow=mix(colors[i],bright[i],200*(430-age)/430);
+        for(int k=0;k<72;++k){
+            /* Circle sampled with integer midpoint-free coordinates. */
+            int x=cx[i]-radius+k*radius/36;
+            int dd=x-cx[i];
+            int rr=radius*radius-dd*dd;
+            if(rr<0)continue;
+            int y=0;
+            while((y+1)*(y+1)<=rr)++y;
+            int yy=cy[i]-y;
+            if(hit(x,yy)==i)dot(p,stride,x,yy,glow);
+            yy=cy[i]+y;
+            if(hit(x,yy)==i)dot(p,stride,x,yy,glow);
+        }
+    }
+    cat(p,stride);
+}
+
 static void particles(struct app *a,u32 *p,unsigned st){
  if(!a->spark_age)return;
  unsigned age=850-a->spark_age;
@@ -195,30 +302,57 @@ static void particles(struct app *a,u32 *p,unsigned st){
    box(p,st,x,y,age<500?3:2,age<500?3:2,k%3?0xffd9bd78u:0xffffffffu);
  }
 }
-void app_frame(struct app *a,u32 *p,unsigned st,unsigned ms){
- if(a->phase!=PAUSED)step(a,ms);
- box(p,st,0,0,WIDTH,HEIGHT,0xff0e121au);
- label(p,st,"DIAMOND SAYS",23,3,0xfff0dfb5u);
- label(p,st,"ROUND",57,1,0xffb5bfce);numeral(p,st,a->length,68,2);
- render_pads(a,p,st);particles(a,p,st);
- if(a->phase==CELEBRATE)label(p,st,"LEVEL UP",159,3,0xffffe0a0u);
- if(a->phase==LOST)label(p,st,"GAME OVER",159,2,0xffffa7a0u);
- if(a->phase==PAUSED)label(p,st,"PAUSED",159,3,0xfff0dfb5u);
- const char *status=a->phase==READY?"CENTER TO START":a->phase==SHOW?"WATCH CLOSELY":
- a->phase==INPUT?"YOUR TURN":a->phase==CELEBRATE?"NICE WORK":
- a->phase==LOST?"TRY AGAIN":a->phase==PAUSED?"CENTER RESUME":"YOU DID IT";
- label(p,st,status,268,2,0xffe9dfc8u);
- unsigned done=a->phase==SHOW?a->shown:a->entered;
- unsigned slots=a->length<14?a->length:14;
- if(!slots)slots=1;
- int start=(WIDTH-(int)slots*12)/2;
- for(unsigned i=0;i<slots;++i){
-  unsigned index=a->length<=14?i:i*a->length/slots;
-  box(p,st,start+(int)i*12,292,7,5,index<done?0xffd9bd78u:0xff465165u);
- }
- label(p,st,a->sounds?"SOUND ON":"SOUND OFF",305,1,0xff8693a6u);
- box(p,st,337,20,18,4,a->sounds?0xffd9bd78u:0xff6b7485u);
+void app_frame(struct app *a,u32 *p,unsigned stride,unsigned ms){
+    if(a->phase!=PAUSED)step(a,ms);
+    box(p,stride,0,0,WIDTH,HEIGHT,0xfff7f1e9u);
+    /* Compact title leaves room for a round label that is always readable. */
+    label(p,stride,"DIAMOND SAYS",16,2,0xff3a333cu);
+    unsigned round=a->length?a->length:1;
+    char text[11]={'R','O','U','N','D',' ','0','0','0',0};
+    if(round<10){
+        text[6]=(char)('0'+round);
+        text[7]=0;
+    }else if(round<100){
+        text[6]=(char)('0'+round/10);
+        text[7]=(char)('0'+round%10);
+        text[8]=0;
+    }else{
+        text[6]=(char)('0'+round/100);
+        text[7]=(char)('0'+round/10%10);
+        text[8]=(char)('0'+round%10);
+    }
+    /* Soft pill backdrop. */
+    for(int y=46;y<76;++y){
+        int inset=0;
+        if(y<55)inset=55-y;
+        else if(y>66)inset=y-66;
+        box(p,stride,129+inset,y,117-2*inset,1,0xffddd3ecu);
+    }
+    label(p,stride,text,53,2,0xff403b56u);
+    render_pads(a,p,stride);
+    particles(a,p,stride);
+    if(a->phase==CELEBRATE)label(p,stride,"LEVEL UP",157,2,0xffffe0a0u);
+    if(a->phase==LOST)label(p,stride,"TRY AGAIN",157,2,0xffffb1a5u);
+    if(a->phase==PAUSED)label(p,stride,"PAUSED",157,2,0xfff0dfb5u);
+    const char *status=a->phase==READY?"CENTER TO START":
+        a->phase==SHOW?"WATCH THE PATTERN":
+        a->phase==INPUT?"YOUR TURN":
+        a->phase==CELEBRATE?"NICE WORK":
+        a->phase==LOST?"TRY AGAIN":
+        a->phase==PAUSED?"CENTER RESUME":"YOU DID IT";
+    label(p,stride,status,277,2,0xff453c50u);
+    unsigned done=a->phase==SHOW?a->shown:a->entered;
+    unsigned slots=a->length<14?a->length:14;
+    if(!slots)slots=1;
+    int start=(WIDTH-(int)slots*12)/2;
+    for(unsigned i=0;i<slots;++i){
+        unsigned index=a->length<=14?i:i*a->length/slots;
+        box(p,stride,start+(int)i*12,297,7,4,
+            index<done?0xffb494d8u:0xffd7cbd8u);
+    }
+    label(p,stride,a->sounds?"SOUND ON":"SOUND OFF",309,1,0xff766d78u);
 }
+
 int app_animated(const struct app *a){
  if(a->phase==PAUSED)return 0;
  if(a->phase==SHOW||a->phase==CELEBRATE||a->spark_age||a->ripple_age||a->flash_age)return 1;

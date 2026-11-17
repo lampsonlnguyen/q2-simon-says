@@ -22,11 +22,11 @@ Do not put the extracted directory under a second folder such as `q2-diamond-say
 
 ## New arcade effects
 
-- Diamond-shaped four-pad layout in Q2 Orange, Champagne Gold, Black and Silver.
+- Rounded-square four-pad layout in Q2 Orange, Champagne Gold, Black and Silver, with a tiny pixel-drawn cat in the middle.
 - Animated color brightness, a glow halo and expanding ripple when a pad activates.
-- Gold particle burst and level-up overlay after every completed sequence.
+- Gold particle burst and level-up overlay after every completed sequence. Round number is displayed together with its label.
 - Progress markers, plus progressively faster playback as the sequence grows.
-- Sound toggle: tap the **top-right sound indicator** to switch MCU click effects on/off.
+- Sound toggle: tap the **SOUND ON/OFF label at the bottom** to switch MCU click effects on/off.
 
 ### Sound compatibility
 
@@ -44,7 +44,7 @@ not reproduce MCU clicks. Sound defaults to on and can be disabled in game.
 - **Touch:** tap a color pad directly after the pattern finishes; touch-down activates immediately.
 - **Return (press):** pause/resume; from title or game-over, exit.
 
-Watch the flashing diamond pads, then repeat the sequence. Each successful round adds a color. Best score saves to `/mnt/mmc/.diamond-says/best` (if the SD card is writable). Maximum sequence length: 128.
+Watch the flashing rounded-square pads around the cat, then repeat the sequence. Each successful round adds a color. Best score saves to `/mnt/mmc/.diamond-says/best` (if the SD card is writable). Maximum sequence length: 128.
 
 ## Build from source
 

@@ -13,12 +13,13 @@ int main(void){
  assert(app_input(&a,"k d 218")&&a.phase==LOST);
  assert(app_input(&a,"k d 218")&&a.phase==SHOW);
  a.phase=INPUT;
- int xx[4]={187,257,187,117}, yy[4]={110,173,236,173};
+ int xx[4]={132,243,243,132}, yy[4]={130,130,218,218};
  char msg[40];snprintf(msg,sizeof msg,"t d %d %d",xx[a.sequence[0]],yy[a.sequence[0]]);
  assert(app_input(&a,msg)&&a.phase==CELEBRATE);
- assert(app_input(&a,"t d 345 42")&&!a.sounds);
+ assert(app_input(&a,"t d 187 311")&&!a.sounds);
  assert(app_input(&a,"k d 170")&&a.phase==PAUSED);
  assert(app_input(&a,"k d 170")&&a.phase==CELEBRATE);
  static u32 fb[WIDTH*HEIGHT];app_frame(&a,fb,HEIGHT,17);
+ assert(fb[187*HEIGHT+HEIGHT-1-175]!=0xfff7f1e9u);
  puts("Diamond Says effects and controls passed");return 0;
 }
