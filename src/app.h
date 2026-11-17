@@ -3,15 +3,15 @@
 #define DIAMOND_SAYS_H
 enum { WIDTH=375, HEIGHT=320, MAX_SEQUENCE=128 };
 typedef unsigned int u32;
-enum phase { READY, SHOW, INPUT, LOST, PAUSED, FINISHED };
+enum phase { READY, SHOW, INPUT, LOST, PAUSED, FINISHED, CELEBRATE };
 struct app {
-    unsigned char sequence[MAX_SEQUENCE];
-    unsigned rng, timer, length, shown, entered, score, best;
-    int phase, previous_phase, selected, lit, wheel, quit, save_pending;
-    int touch_x, touch_y, touching;
+ unsigned char sequence[MAX_SEQUENCE], shine[4];
+ unsigned rng,timer,length,shown,entered,score,best,tick,ripple_age,spark_age,flash_age;
+ int phase,previous_phase,selected,lit,wheel,quit,save_pending,ripple_pad;
+ int sound_event,sound_pending,sounds;
 };
-int app_init(struct app *a, unsigned long best);
-int app_input(struct app *a, const char *message);
-void app_frame(struct app *a, u32 *page, unsigned stride, unsigned elapsed_ms);
-int app_animated(const struct app *a);
+int app_init(struct app *,unsigned long);
+int app_input(struct app *,const char *);
+void app_frame(struct app *,u32 *,unsigned,unsigned);
+int app_animated(const struct app *);
 #endif
