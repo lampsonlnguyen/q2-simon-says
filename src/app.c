@@ -7,10 +7,13 @@ enum { CENTRE=218,RETURN=170,WHEEL_STEP=13 };
 static const u32 colors[4]={0xfff07820u,0xffd9bd78u,0xff17191du,0xffaeb6c1u};
 static const u32 bright[4]={0xffffc078u,0xffffe5a4u,0xff7a8290u,0xfff5f8ffu};
 /* Quadrant order: top-left, top-right, bottom-right, bottom-left. */
-/* Identical 90 x 90 pads on a symmetric 196 x 196 playfield. */
-enum { BOARD_X=89, BOARD_Y=79, BOARD_SIZE=196, PAD_SIZE=90, PAD_RADIUS=17 };
-static const int px[4]={94,191,191,94},py[4]={84,84,181,181};
-static const int cx[4]={139,236,236,139},cy[4]={129,129,226,226};
+/* Wide 151 x 72 pads fill the Q2 display, leaving a separate status bar. */
+enum {
+ BOARD_X=27, BOARD_Y=96, BOARD_W=321, BOARD_H=162,
+ PAD_W=151, PAD_H=72, PAD_RADIUS=18, HUB_X=187, HUB_Y=177, HUB_RADIUS=54
+};
+static const int px[4]={34,190,190,34},py[4]={102,102,180,180};
+static const int cx[4]={109,265,265,109},cy[4]={138,138,216,216};
 static const unsigned char font[36][7]={
 {14,17,17,31,17,17,17},{30,17,17,30,17,17,30},{14,17,16,16,16,17,14},
 {30,17,17,17,17,17,30},{31,16,16,30,16,16,31},{31,16,16,30,16,16,16},
@@ -73,21 +76,21 @@ static int number(const char **p){
 }
 /* Touch only the visible colored areas, never the cat or the dividers. */
 /* The same rounded-rectangle mask is used for paint and touch. */
-static int rounded_hit(int x,int y,int left,int top,int size,int radius){
+static int rounded_hit(int x,int y,int left,int top,int width,int height,int radius){
     int rx=x-left,ry=y-top;
-    if(rx<0||ry<0||rx>=size||ry>=size)return 0;
+    if(rx<0||ry<0||rx>=width||ry>=height)return 0;
     int dx=0,dy=0;
     if(rx<radius)dx=radius-1-rx;
-    else if(rx>=size-radius)dx=rx-(size-radius);
+    else if(rx>=width-radius)dx=rx-(width-radius);
     if(ry<radius)dy=radius-1-ry;
-    else if(ry>=size-radius)dy=ry-(size-radius);
+    else if(ry>=height-radius)dy=ry-(height-radius);
     return dx*dx+dy*dy<radius*radius;
 }
 static int hit(int x,int y){
-    int dx=x-187,dy=y-177;
-    if(dx*dx+dy*dy<=43*43)return -1;
+    int dx=x-HUB_X,dy=y-HUB_Y;
+    if(dx*dx+dy*dy<=HUB_RADIUS*HUB_RADIUS)return -1;
     for(int i=0;i<4;++i)
-        if(rounded_hit(x,y,px[i],py[i],PAD_SIZE,PAD_RADIUS))return i;
+        if(rounded_hit(x,y,px[i],py[i],PAD_W,PAD_H,PAD_RADIUS))return i;
     return -1;
 }
 
@@ -178,11 +181,12 @@ static void oval(u32 *p,unsigned stride,int x,int y,int rx,int ry,u32 color){
             if(dx*dx*ry*ry+dy*dy*rx*rx<=rx*rx*ry*ry)
                 dot(p,stride,x+dx,y+dy,color);
 }
-/* Rounded-square background and four independently rounded, equal-sized pads. */
-static void rounded_rect(u32 *p,unsigned stride,int x,int y,int size,int radius,u32 color){
-    for(int yy=y;yy<y+size;++yy)
-        for(int xx=x;xx<x+size;++xx)
-            if(rounded_hit(xx,yy,x,y,size,radius))
+/* Rounded rectangle shared by the board, pads and status strip. */
+static void rounded_rect(u32 *p,unsigned stride,int x,int y,int width,int height,
+                         int radius,u32 color){
+    for(int yy=y;yy<y+height;++yy)
+        for(int xx=x;xx<x+width;++xx)
+            if(rounded_hit(xx,yy,x,y,width,height,radius))
                 dot(p,stride,xx,yy,color);
 }
 static void stroke(u32 *p,unsigned stride,int x0,int y0,int x1,int y1,int width,u32 c){
@@ -301,19 +305,21 @@ static void cat(u32 *p,unsigned stride){
 static void render_pads(struct app *a,u32 *p,unsigned stride){
     const u32 rim=0xff55505bu;
     /* Cream surround and lavender border match the approved layout. */
-    rounded_rect(p,stride,BOARD_X-4,BOARD_Y-4,BOARD_SIZE+8,30,0xff514957u);
-    rounded_rect(p,stride,BOARD_X-2,BOARD_Y-2,BOARD_SIZE+4,28,0xfffff7f5u);
-    /* Outer shell corners never clip a colored pad: each pad has its own radius. */
-    rounded_rect(p,stride,BOARD_X,BOARD_Y,BOARD_SIZE,27,rim);
+    rounded_rect(p,stride,BOARD_X-4,BOARD_Y-4,BOARD_W+8,BOARD_H+8,
+                 28,0xff514957u);
+    rounded_rect(p,stride,BOARD_X-2,BOARD_Y-2,BOARD_W+4,BOARD_H+4,
+                 26,0xfffff7f5u);
+    /* Pads are independently rounded, so the outer shell clips none of them. */
+    rounded_rect(p,stride,BOARD_X,BOARD_Y,BOARD_W,BOARD_H,25,rim);
     for(int i=0;i<4;++i){
         unsigned shine=a->shine[i];
         if(a->phase==INPUT&&a->selected==i&&shine<60)shine=60;
         u32 base=mix(colors[i],bright[i],shine);
-        rounded_rect(p,stride,px[i],py[i],PAD_SIZE,PAD_RADIUS,base);
+        rounded_rect(p,stride,px[i],py[i],PAD_W,PAD_H,PAD_RADIUS,base);
         /* Simple highlights within the pad itself, preserving uniform shape. */
-        for(int yy=py[i]+8;yy<py[i]+15;++yy)
-            for(int xx=px[i]+18;xx<px[i]+PAD_SIZE-18;++xx)
-                if(rounded_hit(xx,yy,px[i],py[i],PAD_SIZE,PAD_RADIUS))
+        for(int yy=py[i]+8;yy<py[i]+13;++yy)
+            for(int xx=px[i]+20;xx<px[i]+PAD_W-20;++xx)
+                if(rounded_hit(xx,yy,px[i],py[i],PAD_W,PAD_H,PAD_RADIUS))
                     dot(p,stride,xx,yy,mix(base,0xffffffffu,38+shine/7));
         if(a->ripple_pad==i&&a->ripple_age){
             unsigned age=a->ripple_age;
@@ -371,16 +377,17 @@ void app_frame(struct app *a,u32 *p,unsigned stride,unsigned ms){
     label(p,stride,text,53,2,0xff403b56u);
     render_pads(a,p,stride);
     particles(a,p,stride);
-    if(a->phase==CELEBRATE)label(p,stride,"LEVEL UP",157,2,0xffffe0a0u);
-    if(a->phase==LOST)label(p,stride,"TRY AGAIN",157,2,0xffffb1a5u);
-    if(a->phase==PAUSED)label(p,stride,"PAUSED",157,2,0xfff0dfb5u);
+    /* Status has its own pill below the board; never obscure the mascot. */
     const char *status=a->phase==READY?"CENTER TO START":
         a->phase==SHOW?"WATCH THE PATTERN":
         a->phase==INPUT?"YOUR TURN":
-        a->phase==CELEBRATE?"NICE WORK":
+        a->phase==CELEBRATE?"LEVEL UP":
         a->phase==LOST?"TRY AGAIN":
         a->phase==PAUSED?"CENTER RESUME":"YOU DID IT";
-    label(p,stride,status,277,2,0xff453c50u);
+    u32 bg=a->phase==LOST?0xffa83847u:0xffe7d6eeu;
+    u32 fg=a->phase==LOST?0xffffffffu:0xff403447u;
+    rounded_rect(p,stride,69,270,237,23,11,bg);
+    label(p,stride,status,275,2,fg);
     unsigned done=a->phase==SHOW?a->shown:a->entered;
     unsigned slots=a->length<14?a->length:14;
     if(!slots)slots=1;

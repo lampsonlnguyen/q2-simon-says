@@ -110,9 +110,9 @@ static void save_score(u32 best)
     sc(SYS_unlink, (long)SCORE_TEMP, 0, 0, 0, 0, 0);
 }
 
-/* Q2's built-in MCU key-click is the smallest sound effect available.
- * Fork/exec outside the frame loop; no audio files, mixing or extra libraries.
- * Collect finished children to avoid zombies. The MCU click has one pitch.
+/* Small optional Q2 MCU click effect. A short-lived child runs the firmware's
+ * buzzer command; failures are silent and must never prevent the game from running.
+ * Prefer calling cmd_mcu directly rather than through a shell on every pad.
  */
 static int sound_child = -1;
 static void sound_poll(void)
@@ -129,12 +129,16 @@ static void sound_play(int event)
     (void)event;
     sound_poll();
     if (sound_child > 0)
-        return; /* Do not queue overlapping shell processes. */
+        return;
     long child = sc(SYS_fork, 0, 0, 0, 0, 0, 0);
     if (child == 0) {
-        char *const args[] = {"/bin/sh", "-c", "cmd_mcu write_str buzzer", 0};
+        char *const argv[] = {"cmd_mcu", "write_str", "buzzer", 0};
         char *const env[] = {"PATH=/usr/bin:/bin:/usr/sbin:/sbin", 0};
-        sc(SYS_execve, (long)args[0], (long)args, (long)env, 0, 0, 0);
+        sc(SYS_execve, (long)"/usr/bin/cmd_mcu", (long)argv, (long)env, 0, 0, 0);
+        sc(SYS_execve, (long)"/bin/cmd_mcu", (long)argv, (long)env, 0, 0, 0);
+        /* Firmware variants may keep the executable elsewhere on PATH. */
+        char *const fallback[] = {"/bin/sh", "-c", "cmd_mcu write_str buzzer", 0};
+        sc(SYS_execve, (long)fallback[0], (long)fallback, (long)env, 0, 0, 0);
         sc(4246, 127, 0, 0, 0, 0, 0);
         for (;;) {}
     }
@@ -231,6 +235,11 @@ int q2_main(void)
             message[bytes] = '\0';
             if (app_input(&app, message))
                 redraw = 1;
+            /* Button sounds should not wait for a potentially expensive redraw. */
+            if (app.sound_pending) {
+                sound_play(app.sound_event);
+                app.sound_pending = 0;
+            }
             if (!animated && app_animated(&app))
                 deadline = previous = now_ms();
         }
