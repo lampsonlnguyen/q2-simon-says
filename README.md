@@ -4,7 +4,7 @@ An original Simon-style memory game for the Q2 Pod, using **Q2 Orange, Champagne
 
 ## A tribute to DiamondBond
 
-**Diamond Says** was created to honor **DiamondBond** and celebrate all the awesomeness, dedication, and hard work they have put into the Q2 Pod community. Their contributions and passion for improving the Q2 Pod inspired this small game. Thank you, DiamondBond, for everything you do!
+**Diamond Says** was created to honor **DiamondBond** and celebrate all the awesomeness, dedication, and hard work they have put into the Q2 Pod community. Their contributions and passion for improving the Q2 Pod inspired this small game. Thank you, DiamondBond, for everything you do! The mascot thinking cat in the middle button was based on Diamond's avatar in Q2 Pod discord server.
 
 ## Install (same as Dino Runner)
 
