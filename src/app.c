@@ -3,6 +3,7 @@
  * Framebuffer effects use fixed point / integer arithmetic.
  */
 #include "app.h"
+#include "cat_sprite.h"
 enum { CENTRE=218,RETURN=170,WHEEL_STEP=13 };
 static const u32 colors[4]={0xfff07820u,0xffd9bd78u,0xff17191du,0xffaeb6c1u};
 static const u32 bright[4]={0xffffc078u,0xffffe5a4u,0xff7a8290u,0xfff5f8ffu};
@@ -175,132 +176,42 @@ static void disc(u32 *p,unsigned stride,int x,int y,int radius,u32 color){
             if(dx*dx+dy*dy<=radius*radius)
                 dot(p,stride,x+dx,y+dy,color);
 }
-static void oval(u32 *p,unsigned stride,int x,int y,int rx,int ry,u32 color){
-    for(int dy=-ry;dy<=ry;++dy)
-        for(int dx=-rx;dx<=rx;++dx)
-            if(dx*dx*ry*ry+dy*dy*rx*rx<=rx*rx*ry*ry)
-                dot(p,stride,x+dx,y+dy,color);
+/* The source image is reduced to a compact indexed sprite once at build time.
+ * Recolor its gray fills at runtime; black ink and pink ears remain consistent.
+ */
+static void cat(struct app *a,u32 *p,unsigned stride){
+    const int x0=HUB_X-CAT_SPRITE_W*CAT_SCALE/2;
+    const int y0=HUB_Y-CAT_SPRITE_H*CAT_SCALE/2;
+    const u32 palette[6]={
+        0,
+        0xff28282du,                   /* outlines */
+        a->dark_mode?0xfff6f6f6u:0xffb0b0b0u,
+        a->dark_mode?0xffffffffu:0xfff7f7f7u,
+        0xffffabbdu,                   /* pink ears */
+        a->dark_mode?0xffdddddfu:0xff777777u
+    };
+    disc(p,stride,HUB_X,HUB_Y,HUB_RADIUS,0xff292c37u);
+    disc(p,stride,HUB_X,HUB_Y,HUB_RADIUS-3,
+         a->dark_mode?0xff4b4a59u:0xfff5e8f2u);
+    unsigned offset=0;
+    for(unsigned i=0;i<sizeof cat_sprite_rle;i+=2){
+        unsigned count=cat_sprite_rle[i],index=cat_sprite_rle[i+1];
+        while(count--){
+            if(index){
+                int x=x0+(int)(offset%CAT_SPRITE_W)*CAT_SCALE;
+                int y=y0+(int)(offset/CAT_SPRITE_W)*CAT_SCALE;
+                box(p,stride,x,y,CAT_SCALE,CAT_SCALE,palette[index]);
+            }
+            ++offset;
+        }
+    }
 }
-/* Rounded rectangle shared by the board, pads and status strip. */
 static void rounded_rect(u32 *p,unsigned stride,int x,int y,int width,int height,
                          int radius,u32 color){
     for(int yy=y;yy<y+height;++yy)
         for(int xx=x;xx<x+width;++xx)
             if(rounded_hit(xx,yy,x,y,width,height,radius))
                 dot(p,stride,xx,yy,color);
-}
-static void stroke(u32 *p,unsigned stride,int x0,int y0,int x1,int y1,int width,u32 c){
-    int dx=x1-x0,dy=y1-y0;
-    int ax=dx<0?-dx:dx,ay=dy<0?-dy:dy;
-    int n=ax>ay?ax:ay;
-    if(!n){disc(p,stride,x0,y0,width,c);return;}
-    for(int i=0;i<=n;++i)
-        disc(p,stride,x0+dx*i/n,y0+dy*i/n,width,c);
-}
-/* Three-point faceted polygons are tiny and avoid PNG assets or dependencies. */
-static int edge(int ax,int ay,int bx,int by,int x,int y){
-    return (x-ax)*(by-ay)-(y-ay)*(bx-ax);
-}
-static void triangle(u32 *p,unsigned stride,
-                     int ax,int ay,int bx,int by,int cx0,int cy0,u32 color){
-    int minx=ax<bx?ax:bx,maxx=ax>bx?ax:bx;
-    int miny=ay<by?ay:by,maxy=ay>by?ay:by;
-    if(cx0<minx)minx=cx0;
-    if(cx0>maxx)maxx=cx0;
-    if(cy0<miny)miny=cy0;
-    if(cy0>maxy)maxy=cy0;
-    int winding=edge(ax,ay,bx,by,cx0,cy0);
-    if(!winding)return;
-    for(int y=miny;y<=maxy;++y)
-        for(int x=minx;x<=maxx;++x){
-            int e0=edge(ax,ay,bx,by,x,y);
-            int e1=edge(bx,by,cx0,cy0,x,y);
-            int e2=edge(cx0,cy0,ax,ay,x,y);
-            if(winding>0?(e0>=0&&e1>=0&&e2>=0):(e0<=0&&e1<=0&&e2<=0))
-                dot(p,stride,x,y,color);
-        }
-}
-static void sparkle(u32 *p,unsigned stride,int x,int y,u32 color){
-    stroke(p,stride,x-3,y,x+3,y,0,color);
-    stroke(p,stride,x,y-3,x,y+3,0,color);
-    dot(p,stride,x,y,0xffffffffu);
-}
-/* Gray tabby holding a little faceted diamond, as in the approved mockup.
- * All shapes are rasterized directly to the 375x320 framebuffer.
- * The medallion is deliberately small enough to leave useful touch targets.
- */
-static void cat(u32 *p,unsigned stride){
-    const u32 outline=0xff252630u, gray=0xffb7b2b0u;
-    const u32 stripe=0xff746e6cu, white=0xfffffaf8u;
-    const u32 pink=0xffffb0bcu, eye=0xff396d45u;
-    const u32 ice=0xffc8f2ffu, blue=0xff80ceeau;
-    /* Nested round medallion with a warm pastel interior. */
-    disc(p,stride,187,177,54,outline);
-    disc(p,stride,187,177,51,0xfff8edf6u);
-    disc(p,stride,187,177,46,0xfff5e8f2u);
-    /* Body and chest behind the head, with a resting left paw. */
-    oval(p,stride,181,202,29,18,outline);
-    oval(p,stride,181,201,26,16,gray);
-    oval(p,stride,191,203,15,14,white);
-    stroke(p,stride,160,200,167,205,2,stripe);
-    stroke(p,stride,163,207,170,210,2,stripe);
-    /* Ear triangles, outlined with contrasting pink inner ears. */
-    triangle(p,stride,157,161,157,135,180,152,outline);
-    triangle(p,stride,160,157,160,141,175,153,pink);
-    triangle(p,stride,194,150,214,137,213,165,outline);
-    triangle(p,stride,198,151,211,143,210,157,pink);
-    /* Large rounded gray face and white muzzle. */
-    oval(p,stride,184,171,33,27,outline);
-    oval(p,stride,184,170,30,24,gray);
-    oval(p,stride,197,185,19,12,white);
-    /* Six curved tabby streaks use short rounded strokes. */
-    stroke(p,stride,174,149,180,157,2,stripe);
-    stroke(p,stride,183,147,190,156,2,stripe);
-    stroke(p,stride,191,149,197,156,2,stripe);
-    stroke(p,stride,157,172,166,171,2,stripe);
-    stroke(p,stride,157,181,167,177,2,stripe);
-    stroke(p,stride,165,192,173,195,1,stripe);
-    /* Asymmetric eyes give a curious, thoughtful expression. */
-    oval(p,stride,180,174,8,10,outline);
-    oval(p,stride,180,174,6,8,eye);
-    oval(p,stride,204,172,5,8,outline);
-    oval(p,stride,204,172,3,6,eye);
-    disc(p,stride,182,170,2,white);
-    disc(p,stride,205,169,1,white);
-    /* Pink nose, two tiny mouth curves and whiskers. */
-    triangle(p,stride,194,183,202,183,198,189,pink);
-    stroke(p,stride,198,189,197,193,0,outline);
-    stroke(p,stride,197,193,193,195,1,outline);
-    stroke(p,stride,198,193,201,195,1,outline);
-    stroke(p,stride,192,186,178,184,0,white);
-    stroke(p,stride,192,190,178,191,0,white);
-    stroke(p,stride,206,186,220,183,0,white);
-    stroke(p,stride,206,191,220,191,0,white);
-    /* A diamond with six independently shaded facets. */
-    triangle(p,stride,176,194,185,187,210,192,outline);
-    triangle(p,stride,176,194,210,192,204,215,outline);
-    triangle(p,stride,176,194,185,190,192,198,ice);
-    triangle(p,stride,185,190,202,190,192,198,0xffedfcffu);
-    triangle(p,stride,202,190,210,194,192,198,blue);
-    triangle(p,stride,176,194,192,198,187,212,0xff93d9f4u);
-    triangle(p,stride,192,198,210,194,204,213,0xff65b7e4u);
-    triangle(p,stride,192,198,204,213,187,212,ice);
-    stroke(p,stride,176,194,185,187,0,outline);
-    stroke(p,stride,185,187,210,192,0,outline);
-    stroke(p,stride,210,192,204,215,0,outline);
-    stroke(p,stride,204,215,187,212,0,outline);
-    stroke(p,stride,187,212,176,194,0,outline);
-    /* One white paw tucked below the chin and wrapped around the gem. */
-    oval(p,stride,207,198,10,12,outline);
-    oval(p,stride,206,197,8,10,white);
-    stroke(p,stride,204,190,202,193,0,outline);
-    stroke(p,stride,209,191,207,194,0,outline);
-    /* The other paw rests naturally on the lower gem facet. */
-    oval(p,stride,177,211,13,7,outline);
-    oval(p,stride,177,210,11,5,white);
-    stroke(p,stride,178,208,179,212,0,outline);
-    sparkle(p,stride,172,190,blue);
-    sparkle(p,stride,214,211,0xffe4faffu);
 }
 static void render_pads(struct app *a,u32 *p,unsigned stride){
     const u32 rim=0xff55505bu;
@@ -334,7 +245,7 @@ static void render_pads(struct app *a,u32 *p,unsigned stride){
             }
         }
     }
-    cat(p,stride);
+    cat(a,p,stride);
 }
 
 static void particles(struct app *a,u32 *p,unsigned st){
@@ -350,9 +261,11 @@ static void particles(struct app *a,u32 *p,unsigned st){
 }
 void app_frame(struct app *a,u32 *p,unsigned stride,unsigned ms){
     if(a->phase!=PAUSED)step(a,ms);
-    box(p,stride,0,0,WIDTH,HEIGHT,0xfff7f1e9u);
+    box(p,stride,0,0,WIDTH,HEIGHT,
+        a->dark_mode?0xff171923u:0xfff7f1e9u);
     /* Compact title leaves room for a round label that is always readable. */
-    label(p,stride,"DIAMOND SAYS",16,2,0xff3a333cu);
+    label(p,stride,"DIAMOND SAYS",16,2,
+        a->dark_mode?0xfff4edf3u:0xff3a333cu);
     unsigned round=a->length?a->length:1;
     char text[11]={'R','O','U','N','D',' ','0','0','0',0};
     if(round<10){
@@ -372,9 +285,11 @@ void app_frame(struct app *a,u32 *p,unsigned stride,unsigned ms){
         int inset=0;
         if(y<55)inset=55-y;
         else if(y>66)inset=y-66;
-        box(p,stride,129+inset,y,117-2*inset,1,0xffddd3ecu);
+        box(p,stride,129+inset,y,117-2*inset,1,
+            a->dark_mode?0xff52475bu:0xffddd3ecu);
     }
-    label(p,stride,text,53,2,0xff403b56u);
+    label(p,stride,text,53,2,
+        a->dark_mode?0xffffffffu:0xff403b56u);
     render_pads(a,p,stride);
     particles(a,p,stride);
     /* Status has its own pill below the board; never obscure the mascot. */
@@ -384,8 +299,9 @@ void app_frame(struct app *a,u32 *p,unsigned stride,unsigned ms){
         a->phase==CELEBRATE?"LEVEL UP":
         a->phase==LOST?"TRY AGAIN":
         a->phase==PAUSED?"CENTER RESUME":"YOU DID IT";
-    u32 bg=a->phase==LOST?0xffa83847u:0xffe7d6eeu;
-    u32 fg=a->phase==LOST?0xffffffffu:0xff403447u;
+    u32 bg=a->phase==LOST?0xffa83847u:
+        a->dark_mode?0xff484254u:0xffe7d6eeu;
+    u32 fg=a->phase==LOST||a->dark_mode?0xffffffffu:0xff403447u;
     rounded_rect(p,stride,69,270,237,23,11,bg);
     label(p,stride,status,275,2,fg);
     unsigned done=a->phase==SHOW?a->shown:a->entered;
@@ -397,7 +313,8 @@ void app_frame(struct app *a,u32 *p,unsigned stride,unsigned ms){
         box(p,stride,start+(int)i*12,297,7,4,
             index<done?0xffb494d8u:0xffd7cbd8u);
     }
-    label(p,stride,a->sounds?"SOUND ON":"SOUND OFF",309,1,0xff766d78u);
+    label(p,stride,a->sounds?"SOUND ON":"SOUND OFF",309,1,
+        a->dark_mode?0xffe1d9e7u:0xff766d78u);
 }
 
 int app_animated(const struct app *a){

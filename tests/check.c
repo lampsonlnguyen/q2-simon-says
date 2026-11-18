@@ -39,5 +39,13 @@ int main(void){
  assert(!app_input(&a,"t d 94 84"));
  assert(!app_input(&a,"t d 187 85"));
  assert(app_input(&a,"t d 109 138") || a.phase==INPUT);
- puts("Diamond Says rounded pads and mascot controls passed");return 0;
+ /* Dark mode recolors the indexed cat sprite without altering game state. */
+ a.phase=INPUT;a.dark_mode=0;
+ app_frame(&a,fb,HEIGHT,0);
+ u32 light_pixel=fb[187*HEIGHT+HEIGHT-1-138];
+ a.dark_mode=1;
+ app_frame(&a,fb,HEIGHT,0);
+ u32 dark_pixel=fb[187*HEIGHT+HEIGHT-1-138];
+ assert(light_pixel!=dark_pixel);
+ puts("Diamond Says sprite, theme palettes and controls passed");return 0;
 }

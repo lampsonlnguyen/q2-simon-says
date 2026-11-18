@@ -146,6 +146,39 @@ static void sound_play(int event)
         sound_child = (int)child;
 }
 
+/* The Q2 firmware stores display preferences in /mnt/data/config.ini.
+ * [IPOD] LIGHT=0 is dark, LIGHT=1 is light, LIGHT=2 is automatic.
+ * For automatic mode use local device time (busybox date); if unavailable,
+ * preserve dark as the safe fallback. This runs once on game launch.
+ */
+static int theme_from_config(void){
+    int fd=(int)sc(SYS_open,(long)"/mnt/data/config.ini",O_CLOEXEC,0,0,0,0);
+    if(fd<0)return 1;
+    char line[96],chunk[256];
+    int len=0,ipod=0,light=0;
+    long got;
+    while((got=sc(SYS_read,fd,(long)chunk,sizeof chunk,0,0,0))>0){
+        for(int j=0;j<got;++j){
+            char c=chunk[j];
+            if(c=='\r')continue;
+            if(c!='\n'&&len<(int)sizeof line-1){line[len++]=c;continue;}
+            line[len]=0;len=0;
+            char *p=line;while(*p==' '||*p=='\t')++p;
+            if(*p=='['){
+                ipod=p[1]=='I'&&p[2]=='P'&&p[3]=='O'&&p[4]=='D'&&p[5]==']';
+            }else if(ipod&&p[0]=='L'&&p[1]=='I'&&p[2]=='G'&&p[3]=='H'&&p[4]=='T'){
+                p+=5;while(*p==' '||*p=='\t')++p;
+                if(*p=='='){
+                    ++p;while(*p==' '||*p=='\t')++p;
+                    if(*p>='0'&&*p<='2')light=*p-'0';
+                }
+            }
+        }
+    }
+    sc(SYS_close,fd,0,0,0,0,0);
+    return light!=1;
+}
+
 static void copy_page(u32 *dst, const u32 *src, unsigned stride)
 {
     for (int x = 0; x < WIDTH; ++x)
@@ -184,6 +217,7 @@ int q2_main(void)
         sc(SYS_close, fb, 0, 0, 0, 0, 0);
         return 1;
     }
+    app.dark_mode=theme_from_config();
     unsigned visible = front;
     int can_pan = rows >= 2 * WIDTH && (front == 0 || front == WIDTH);
     struct { int fd; short events, revents; } poll_input = {input, 1, 0};

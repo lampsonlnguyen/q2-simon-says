@@ -8,7 +8,7 @@ struct app {
  unsigned char sequence[MAX_SEQUENCE], shine[4];
  unsigned rng,timer,length,shown,entered,score,best,tick,ripple_age,spark_age,flash_age;
  int phase,previous_phase,selected,lit,wheel,quit,save_pending,ripple_pad;
- int sound_event,sound_pending,sounds;
+ int sound_event,sound_pending,sounds,dark_mode;
 };
 int app_init(struct app *,unsigned long);
 int app_input(struct app *,const char *);

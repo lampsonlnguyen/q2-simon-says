@@ -22,7 +22,7 @@ Do not put the extracted directory under a second folder such as `q2-diamond-say
 
 ## New arcade effects
 
-- Four equal-sized, wide rounded rectangular buttons inside a compact rounded case, using Q2 Orange, Champagne Gold, Black and Silver. The center medallion contains an original gray tabby with green eyes, a white muzzle, pink ears, and a faceted blue diamond held between its paws, based on the approved design.
+- Four equal-sized, wide rounded rectangular buttons inside a compact rounded case, using Q2 Orange, Champagne Gold, Black and Silver. The center medallion contains a tiny 48x48 indexed cat sprite (rendered at 2x), recolored white on the Q2 dark theme and gray on the light theme.
 - Animated color brightness, a glow halo and expanding ripple when a pad activates.
 - Gold particle bursts and a dedicated status strip for level-up and game-over messages (never covering the cat). Round number is displayed together with its label.
 - Progress markers, plus progressively faster playback as the sequence grows.
@@ -36,6 +36,8 @@ This is a simple click with **one pitch**, not four separate musical notes.
 It uses no external audio framework and does not take over headphone audio.
 The buzzer is best tested on real Q2 hardware; the desktop emulator may
 not reproduce MCU clicks. Sound defaults to on and can be disabled in game.
+
+The sprite is embedded as simple run-length color pairs in `src/cat_sprite.h` (no PNG decoder or extra runtime dependencies). The firmware theme is read from `[IPOD] LIGHT` in `/mnt/data/config.ini` when the game opens. Explicit Light/Dark modes are supported; automatic mode currently falls back to dark.
 
 ## Controls
 
