@@ -148,8 +148,9 @@ static void sound_play(int event)
 
 /* The Q2 firmware stores display preferences in /mnt/data/config.ini.
  * [IPOD] LIGHT=0 is dark, LIGHT=1 is light, LIGHT=2 is automatic.
- * For automatic mode use local device time (busybox date); if unavailable,
- * preserve dark as the safe fallback. This runs once on game launch.
+ * Automatic mode currently falls back to dark because the game's tiny
+ * freestanding runtime does not have the firmware's localtime helper.
+ * This runs once when the game launches.
  */
 static int theme_from_config(void){
     int fd=(int)sc(SYS_open,(long)"/mnt/data/config.ini",O_CLOEXEC,0,0,0,0);
