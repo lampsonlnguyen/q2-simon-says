@@ -2,6 +2,10 @@
 
 An original Simon-style memory game for the Q2 Pod, using **Q2 Orange, Champagne Gold, Black, and Silver**.
 
+## A tribute to DiamondBond
+
+**Diamond Says** was created to honor **DiamondBond** and celebrate all the awesomeness, dedication, and hard work they have put into the Q2 Pod community. Their contributions and passion for improving the Q2 Pod inspired this small game. Thank you, DiamondBond, for everything you do!
+
 ## Install (same as Dino Runner)
 
 1. Download **q2-diamond-says.zip** from [Releases](https://github.com/lampsonlnguyen/q2-simon-says/releases). **Do not download GitHub's “Source code (zip)”**: it contains source files, not the compiled game.
