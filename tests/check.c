@@ -19,7 +19,7 @@ int main(void){
  assert(app_input(&a,msg)&&a.phase==CELEBRATE);
  assert(app_input(&a,"t d 187 311")&&!a.sounds);
  assert(app_input(&a,"k d 170")&&a.phase==PAUSED);
- assert(app_input(&a,"k d 170")&&a.phase==CELEBRATE);
+ assert(app_input(&a,"k d 170")&&a.quit==1);
  static u32 fb[WIDTH*HEIGHT];app_frame(&a,fb,HEIGHT,17);
  assert(fb[187*HEIGHT+HEIGHT-1-177]!=0xfff7f1e9u);
  /* The hub contains a rendered cat, and each identical pad retains its color. */

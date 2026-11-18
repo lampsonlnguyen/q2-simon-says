@@ -44,7 +44,7 @@ The sprite is embedded as simple run-length color pairs in `src/cat_sprite.h` (n
 - **Center (press):** start, select a highlighted pad, restart, resume.
 - **Wheel:** cycle through the four pads.
 - **Touch:** tap a color pad directly after the pattern finishes; touch-down activates immediately.
-- **Return (press):** pause/resume; from title or game-over, exit.
+- **Return (press):** pause on first press, exit on second press while paused; from title or game-over, exit.
 
 Watch the flashing rounded-square pads around the cat, then repeat the sequence. Each successful round adds a color. Best score saves to `/mnt/mmc/.diamond-says/best` (if the SD card is writable). Maximum sequence length: 128.
 

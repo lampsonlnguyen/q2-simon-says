@@ -65,7 +65,7 @@ static void choose(struct app *a,int n){
 }
 static void action(struct app *a){
  if(a->phase==READY||a->phase==LOST||a->phase==FINISHED)begin(a);
- else if(a->phase==PAUSED)a->phase=a->previous_phase;
+ else if(a->phase==PAUSED)a->quit=1;
  else if(a->phase==INPUT)choose(a,a->selected);
 }
 static int number(const char **p){
