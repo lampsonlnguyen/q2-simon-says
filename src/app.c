@@ -110,7 +110,7 @@ int app_input(struct app *a,const char *s){
   if(s[2]!='d')return 0;
   if(x==CENTRE){action(a);return 1;}
   if(x==RETURN){
-   if(a->phase==PAUSED)a->phase=a->previous_phase;
+   if(a->phase==PAUSED)a->quit=1;
    else if(a->phase==READY||a->phase==LOST||a->phase==FINISHED)a->quit=1;
    else {a->previous_phase=a->phase;a->phase=PAUSED;}
    return 1;
