@@ -6,7 +6,7 @@ Q2_FLAGS = --target=mipsel-linux-gnu -march=mips32r2 -mabi=32 -mfp64 -mnan=2008 
 Q2_CFLAGS ?= -Oz -Wall -Wextra
 CARD = dist/.diamond-says
 all: dist/q2-diamond-says.zip
-build/q2/%.o: %.c src/app.h
+build/q2/%.o: %.c src/app.h src/font.h src/cat_sprite.h
 	mkdir -p $(@D)
 	$(Q2_CC) $(Q2_FLAGS) $(Q2_CFLAGS) -std=c99 -Isrc -c $< -o $@
 $(CARD)/q2-diamond-says: build/q2/src/app.o build/q2/src/platform_q2.o
@@ -20,7 +20,7 @@ $(CARD)/LICENSE.txt: LICENSE
 	cp $< $@
 dist/q2-diamond-says.zip: $(CARD)/q2-diamond-says $(CARD)/q2app $(CARD)/LICENSE.txt
 	cd dist && zip -q q2-diamond-says.zip $(patsubst dist/%,%,$^)
-build/check: tests/check.c src/app.c src/app.h
+build/check: tests/check.c src/app.c src/app.h src/font.h src/cat_sprite.h
 	mkdir -p $(@D)
 	$(CC) -O2 -Wall -Wextra -Werror -std=c99 -Isrc -o $@ tests/check.c src/app.c
 check: build/check

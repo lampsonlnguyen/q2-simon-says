@@ -24,13 +24,13 @@ microSD/
 
 Do not put the extracted directory under a second folder such as `q2-diamond-says/` or leave the game as a ZIP on the card. Do not rename the `.diamond-says` directory.
 
-## New arcade effects
+## Look
 
-- Four equal-sized, wide rounded rectangular buttons inside a compact rounded case, using Q2 Orange, Champagne Gold, Black and Silver. The center medallion contains a tiny 48x48 indexed cat sprite (rendered at 2x), recolored white on the Q2 dark theme and gray on the light theme.
-- Animated color brightness, a glow halo and expanding ripple when a pad activates.
-- Gold particle bursts and a dedicated status strip for level-up and game-over messages (never covering the cat). Round number is displayed together with its label.
-- Progress markers, plus progressively faster playback as the sequence grows.
-- Sound toggle: tap the **SOUND ON/OFF label at the bottom** to switch MCU click effects on/off.
+Diamond Says is drawn the way Q2 Pod draws its own games (Snake, Vortex): **Round** and **Best** along the top, a flat board in a hairline frame, and the theme's own pop-up for the title, the pause menu and the game over. On Q2 Pod firmware that passes `Q2_POPUP`, the game takes its colours and pop-up style from your theme (Minimal, Modern or Classic, in Light or Dark Mode); older firmware gets the game's own dark or light look from `[IPOD] LIGHT`. Text is set in Liberation Sans Bold, Q2 Pod's game-menu face. New UI is flat, as Q2 Pod asks: no gloss, glow or gradients.
+
+- Four rounded pads in Q2 Orange, Champagne Gold, Black and Silver; a lit pad brightens, and the pad the wheel is on is ringed.
+- The cat mascot sits in the middle hub, recoloured for Light and Dark Mode.
+- Under the board, **Watch** / **Your turn** / **Level up!** and a dot for each step of the round.
 
 ### Sound compatibility
 
@@ -39,18 +39,18 @@ This build uses the Q2's built-in MCU **buzzer click**, via the firmware's
 This is a simple click with **one pitch**, not four separate musical notes.
 It uses no external audio framework and does not take over headphone audio.
 The buzzer is best tested on real Q2 hardware; the desktop emulator may
-not reproduce MCU clicks. Sound defaults to on and can be disabled in game.
+not reproduce MCU clicks. Sound defaults to on; turn it off from the pause menu (**Sound: On/Off**).
 
 The sprite is embedded as simple run-length color pairs in `src/cat_sprite.h` (no PNG decoder or extra runtime dependencies). The firmware theme is read from `[IPOD] LIGHT` in `/mnt/data/config.ini` when the game opens. Explicit Light/Dark modes are supported; automatic mode currently falls back to dark.
 
 ## Controls
 
-- **Center (press):** start, select a highlighted pad, restart, resume.
-- **Wheel:** cycle through the four pads.
-- **Touch:** tap a color pad directly after the pattern finishes; touch-down activates immediately.
-- **Return (press):** pause on first press, exit on second press while paused; from title or game-over, exit.
+- **Center (press):** start, select the ringed pad, pick a pause-menu row, play again.
+- **Wheel:** cycle through the four pads; move through the pause menu.
+- **Touch:** tap a color pad directly after the pattern finishes; tap a pause-menu row.
+- **Return (press):** open the pause menu (**Continue**, **Sound**, **Quit**); press again to exit. From the title or game over, exit.
 
-Watch the flashing rounded-square pads around the cat, then repeat the sequence. Each successful round adds a color. Best score saves to `/mnt/mmc/.diamond-says/best` (if the SD card is writable). Maximum sequence length: 128.
+Watch the pads light up around the cat, then repeat the sequence. Each successful round adds a color. Best score saves to `/mnt/mmc/.diamond-says/best` (if the SD card is writable). Maximum sequence length: 128.
 
 ## Build from source
 

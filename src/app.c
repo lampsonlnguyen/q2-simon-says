@@ -1,71 +1,69 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026. Diamond Says for Q2 Pod.
- * Framebuffer effects use fixed point / integer arithmetic.
+ * Drawn the way Q2 Pod draws its own games (Snake, Vortex): the score and best along the top, a
+ * flat board in a hairline frame, and the theme's pop-up (Q2_POPUP) for the title, the pause and
+ * the game over. Integer arithmetic only.
  */
 #include "app.h"
 #include "cat_sprite.h"
+#include "font.h"
 enum { CENTRE=218,RETURN=170,WHEEL_STEP=13 };
+/* Q2 Orange, Champagne Gold, Black and Silver; lit, each brightens. */
 static const u32 colors[4]={0xfff07820u,0xffd9bd78u,0xff17191du,0xffaeb6c1u};
 static const u32 bright[4]={0xffffc078u,0xffffe5a4u,0xff7a8290u,0xfff5f8ffu};
 /* Quadrant order: top-left, top-right, bottom-right, bottom-left. */
-/* Wide 151 x 72 pads fill the Q2 display, leaving a separate status bar. */
 enum {
- BOARD_X=27, BOARD_Y=96, BOARD_W=321, BOARD_H=162,
- PAD_W=151, PAD_H=72, PAD_RADIUS=18, HUB_X=187, HUB_Y=177, HUB_RADIUS=54
+ HUD_X=24, HUD_Y=6,                               /* as Q2 Pod's games */
+ BOARD_X=24, BOARD_Y=38, BOARD_W=326, BOARD_H=228, BOARD_RADIUS=8,
+ PAD_W=154, PAD_H=105, PAD_RADIUS=12,
+ HUB_X=187, HUB_Y=152, HUB_RADIUS=52, HUB_MOAT=57,
+ STATUS_Y=272, DOTS_Y=303, DOT=6, DOT_STEP=14,
+ POP_W=281, POP_X=(375-281)/2, CAPS_TRACK=2, DOT_X=76, TEXT_X=92
 };
-static const int px[4]={34,190,190,34},py[4]={102,102,180,180};
-static const int cx[4]={109,265,265,109},cy[4]={138,138,216,216};
-static const unsigned char font[36][7]={
-{14,17,17,31,17,17,17},{30,17,17,30,17,17,30},{14,17,16,16,16,17,14},
-{30,17,17,17,17,17,30},{31,16,16,30,16,16,31},{31,16,16,30,16,16,16},
-{14,17,16,23,17,17,15},{17,17,17,31,17,17,17},{14,4,4,4,4,4,14},
-{1,1,1,1,17,17,14},{17,18,20,24,20,18,17},{16,16,16,16,16,16,31},
-{17,27,21,21,17,17,17},{17,25,21,19,17,17,17},{14,17,17,17,17,17,14},
-{30,17,17,30,16,16,16},{14,17,17,17,21,18,13},{30,17,17,30,20,18,17},
-{15,16,16,14,1,1,30},{31,4,4,4,4,4,4},{17,17,17,17,17,17,14},
-{17,17,17,17,17,10,4},{17,17,17,21,21,21,10},{17,17,10,4,10,17,17},
-{17,17,10,4,4,4,4},{31,1,2,4,8,16,31},
-{14,17,19,21,25,17,14},{4,12,4,4,4,4,14},{14,17,1,2,4,8,31},
-{30,1,1,14,1,1,30},{2,6,10,18,31,2,2},{31,16,30,1,1,17,14},
-{6,8,16,30,17,17,14},{31,1,2,4,8,8,8},{14,17,17,14,17,17,14},
-{14,17,17,15,1,2,12}
-};
+static const int px[4]={30,190,190,30},py[4]={44,44,155,155};
 
+/* ---- the game ---- */
 static unsigned rand32(struct app *a){a->rng^=a->rng<<13;a->rng^=a->rng>>17;a->rng^=a->rng<<5;return a->rng;}
 static void add(struct app *a){if(a->length<MAX_SEQUENCE)a->sequence[a->length++]=(unsigned char)(rand32(a)&3u);}
 static void signal(struct app *a,int s){if(a->sounds){a->sound_event=s;a->sound_pending=1;}}
-static void pulse(struct app *a,int n){a->shine[n]=255;a->ripple_pad=n;a->ripple_age=1;signal(a,n+1);}
+static void pulse(struct app *a,int n){a->shine[n]=255;signal(a,n+1);}
 static unsigned tempo(struct app *a){
     if(a->length>=24)return 170;
     return 460-a->length*12;
 }
 static void begin(struct app *a){
  a->rng^=a->tick+0x9e3779b9u;if(!a->rng)a->rng=0x12345678u;
- a->length=a->shown=a->entered=a->score=0;a->selected=0;a->lit=-1;
- a->ripple_age=a->spark_age=a->flash_age=0;
+ a->length=a->shown=a->entered=a->score=0;a->selected=0;a->lit=-1;a->record=0;
  for(int i=0;i<4;++i)a->shine[i]=0;
  add(a);a->phase=SHOW;a->timer=500;
 }
 int app_init(struct app *a,unsigned long best){
  *a=(struct app){0};a->rng=0x92c347e1u;a->best=best<=MAX_SEQUENCE?best:0;
- a->phase=READY;a->lit=-1;a->ripple_pad=-1;a->sounds=1;return 1;
+ a->phase=READY;a->lit=-1;a->sounds=1;a->dark_mode=1;app_theme(a,0);return 1;
 }
 static void choose(struct app *a,int n){
  if(a->phase!=INPUT||n<0||n>3)return;
  a->selected=n;pulse(a,n);
  if(a->sequence[a->entered]!=(unsigned)n){
-  a->phase=LOST;a->flash_age=620;signal(a,5);return;
+  a->phase=LOST;signal(a,5);return;
  }
  ++a->entered;
  if(a->entered==a->length){
-  a->score=a->length;if(a->score>a->best){a->best=a->score;a->save_pending=1;}
+  a->score=a->length;
+  if(a->score>a->best){a->best=a->score;a->save_pending=1;a->record=1;}
   a->phase=a->length==MAX_SEQUENCE?FINISHED:CELEBRATE;
-  a->timer=900;a->spark_age=850;a->flash_age=500;signal(a,6);
+  a->timer=900;signal(a,6);
  }
+}
+static void pause_menu(struct app *a){a->previous_phase=a->phase;a->phase=PAUSED;a->choice=MENU_CONTINUE;}
+static void pick(struct app *a){
+ if(a->choice==MENU_CONTINUE)a->phase=a->previous_phase;
+ else if(a->choice==MENU_SOUND)a->sounds=!a->sounds;
+ else a->quit=1;
 }
 static void action(struct app *a){
  if(a->phase==READY||a->phase==LOST||a->phase==FINISHED)begin(a);
- else if(a->phase==PAUSED)a->quit=1;
+ else if(a->phase==PAUSED)pick(a);
  else if(a->phase==INPUT)choose(a,a->selected);
 }
 static int number(const char **p){
@@ -75,7 +73,6 @@ static int number(const char **p){
  while(**p>='0'&&**p<='9'){if(v>1000)return 10000;v=v*10+*(*p)++-'0';}
  return neg?-v:v;
 }
-/* Touch only the visible colored areas, never the cat or the dividers. */
 /* The same rounded-rectangle mask is used for paint and touch. */
 static int rounded_hit(int x,int y,int left,int top,int width,int height,int radius){
     int rx=x-left,ry=y-top;
@@ -87,12 +84,22 @@ static int rounded_hit(int x,int y,int left,int top,int width,int height,int rad
     else if(ry>=height-radius)dy=ry-(height-radius);
     return dx*dx+dy*dy<radius*radius;
 }
+/* Touch only the pads, never the cat. */
 static int hit(int x,int y){
     int dx=x-HUB_X,dy=y-HUB_Y;
-    if(dx*dx+dy*dy<=HUB_RADIUS*HUB_RADIUS)return -1;
+    if(dx*dx+dy*dy<=HUB_MOAT*HUB_MOAT)return -1;
     for(int i=0;i<4;++i)
         if(rounded_hit(x,y,px[i],py[i],PAD_W,PAD_H,PAD_RADIUS))return i;
     return -1;
+}
+/* The pause menu's box and its rows, as Q2 Pod's popup() places them. */
+static int menu_top(const struct app *a){return a->theme.style==CLASSIC?POP_ROW+1:POP_ROW+6;}
+static int menu_h(const struct app *a){return menu_top(a)+MENU_ROWS*POP_ROW+(a->theme.style==CLASSIC?0:8);}
+static int menu_y(const struct app *a){return (HEIGHT-menu_h(a))/2;}
+static int menu_row(const struct app *a,int x,int y){
+    int r=y-menu_y(a)-menu_top(a);
+    if(x<POP_X||x>=POP_X+POP_W||r<0||r>=MENU_ROWS*POP_ROW)return -1;
+    return r/POP_ROW;
 }
 
 int app_input(struct app *a,const char *s){
@@ -101,8 +108,13 @@ int app_input(struct app *a,const char *s){
   const char *p=s+2;int v=number(&p);
   if(v< -2000||v>2000)return 0;
   a->wheel-=v;int steps=a->wheel/WHEEL_STEP;a->wheel%=WHEEL_STEP;
-  if(a->phase==INPUT&&steps)a->selected=(a->selected+steps%4+4)%4;
-  return steps!=0;
+  if(!steps)return 0;
+  if(a->phase==INPUT)a->selected=(a->selected+steps%4+4)%4;
+  else if(a->phase==PAUSED){
+   int c=a->choice+steps;
+   a->choice=c<0?0:c>=MENU_ROWS?MENU_ROWS-1:c;
+  }
+  return 1;
  }
  if(!s[2]||s[3]!=' ')return 0;
  const char *p=s+4;int x=number(&p);
@@ -112,14 +124,17 @@ int app_input(struct app *a,const char *s){
   if(x==RETURN){
    if(a->phase==PAUSED)a->quit=1;
    else if(a->phase==READY||a->phase==LOST||a->phase==FINISHED)a->quit=1;
-   else {a->previous_phase=a->phase;a->phase=PAUSED;}
+   else pause_menu(a);
    return 1;
   }
   return 0;
  }
  if(s[0]=='t'&&s[2]=='d'){
   int y=number(&p);if(x<0||x>=WIDTH||y<0||y>=HEIGHT)return 0;
-  if(y>=299){a->sounds=!a->sounds;return 1;}
+  if(a->phase==PAUSED){
+   int r=menu_row(a,x,y);if(r<0)return 0;
+   a->choice=r;pick(a);return 1;
+  }
   if(a->phase!=INPUT){action(a);return 1;}
   int n=hit(x,y);if(n>=0){choose(a,n);return 1;}
  }
@@ -130,9 +145,6 @@ static void step(struct app *a,unsigned dt){
  for(int i=0;i<4;++i){
   unsigned f=dt*255/360;a->shine[i]=(unsigned char)(f>=a->shine[i]?0:a->shine[i]-f);
  }
- if(a->ripple_age){a->ripple_age+=dt;if(a->ripple_age>430)a->ripple_age=0;}
- if(a->spark_age)a->spark_age=dt>=a->spark_age?0:a->spark_age-dt;
- if(a->flash_age)a->flash_age=dt>=a->flash_age?0:a->flash_age-dt;
  if(a->phase!=SHOW&&a->phase!=CELEBRATE)return;
  while(dt>=a->timer){
   dt-=a->timer;a->timer=0;
@@ -145,6 +157,8 @@ static void step(struct app *a,unsigned dt){
  }
  if(a->timer>dt)a->timer-=dt;
 }
+
+/* ---- the theme ---- */
 static u32 mix(u32 a,u32 b,unsigned v){
  if(v>255)v=255;
  unsigned u=255-v;
@@ -153,173 +167,267 @@ static u32 mix(u32 a,u32 b,unsigned v){
  unsigned blue=((a&255)*u+(b&255)*v)/255;
  return 0xff000000u|(r<<16)|(g<<8)|blue;
 }
-static void box(u32 *p,unsigned st,int x,int y,int w,int h,u32 c){
- if(x<0||y<0||x+w>WIDTH||y+h>HEIGHT)return;
- for(int i=x;i<x+w;++i)for(int j=y;j<y+h;++j)p[i*st+HEIGHT-1-j]=c;
+static unsigned luma(u32 c){return (((c>>16)&255)*3+((c>>8)&255)*6+(c&255))/10;}
+static int word_is(const char *s,const char *w){
+ while(*w&&*s==*w)++s,++w;
+ return !*w&&(*s==' '||!*s);
 }
-static void label(u32 *p,unsigned st,const char *s,int y,int z,u32 c){
- int n=0;while(s[n])++n;int x=(WIDTH-(n*6-1)*z)/2;
- for(;*s;++s,x+=6*z){
-  int g=(*s>='A'&&*s<='Z')?*s-'A':(*s>='0'&&*s<='9')?*s-'0'+26:-1;
-  if(g<0)continue;
-  for(int r=0;r<7;++r)for(int col=0;col<5;++col)
-   if(font[g][r]&(16u>>col))box(p,st,x+col*z,y+r*z,z,z,c);
+static const char *hex(const char *s,u32 *c){ /* " RRGGBB" into c: past it, else 0 */
+ unsigned v=0;
+ if(*s++!=' ')return 0;
+ for(int i=0;i<6;++i,++s){
+  int d=*s>='0'&&*s<='9'?*s-'0':*s>='a'&&*s<='f'?*s-'a'+10:*s>='A'&&*s<='F'?*s-'A'+10:-1;
+  if(d<0)return 0;
+  v=v<<4|(unsigned)d;
  }
+ *c=0xff000000u|v;return s;
 }
-static void dot(u32 *p,unsigned stride,int x,int y,u32 color){
-    if(x>=0&&x<WIDTH&&y>=0&&y<HEIGHT)
-        p[x*stride+HEIGHT-1-y]=color;
+/* "<style> <box> <frame> <title> <text> <pick> <pick_text>" and, for Classic, its title strip's
+ * and chosen band's POP_ROW rows each (q2-pod docs/librespot.md). Anything short of a whole value
+ * keeps the game's own look. Later firmware's further fields, after a space, are not ours. */
+static int theme_read(struct theme *t,const char *s){
+ int style=word_is(s,"minimal")?MINIMAL:word_is(s,"modern")?MODERN:word_is(s,"classic")?CLASSIC:0;
+ if(!style)return 0;
+ while(*s&&*s!=' ')++s;
+ u32 *c[6]={&t->box,&t->frame,&t->title,&t->text,&t->pick,&t->pick_text};
+ for(int i=0;i<6;++i)if(!(s=hex(s,c[i])))return 0;
+ for(int i=0;style==CLASSIC&&i<2*POP_ROW;++i)
+  if(!(s=hex(s,i<POP_ROW?&t->head[i]:&t->band[i-POP_ROW])))return 0;
+ if(*s&&*s!=' ')return 0;
+ t->style=style;return 1;
 }
-static void disc(u32 *p,unsigned stride,int x,int y,int radius,u32 color){
-    for(int dy=-radius;dy<=radius;++dy)
-        for(int dx=-radius;dx<=radius;++dx)
-            if(dx*dx+dy*dy<=radius*radius)
-                dot(p,stride,x+dx,y+dy,color);
-}
-/* The source image is reduced to a compact indexed sprite once at build time.
- * Recolor its gray fills at runtime; black ink and pink ears remain consistent.
- */
-static void cat(struct app *a,u32 *p,unsigned stride){
-    const int x0=HUB_X-CAT_SPRITE_W*CAT_SCALE/2;
-    const int y0=HUB_Y-CAT_SPRITE_H*CAT_SCALE/2;
-    const u32 palette[6]={
-        0,
-        0xff28282du,                   /* outlines */
-        a->dark_mode?0xfff6f6f6u:0xffb0b0b0u,
-        a->dark_mode?0xffffffffu:0xfff7f7f7u,
-        0xffffabbdu,                   /* pink ears */
-        a->dark_mode?0xffdddddfu:0xff777777u
-    };
-    disc(p,stride,HUB_X,HUB_Y,HUB_RADIUS,0xff292c37u);
-    disc(p,stride,HUB_X,HUB_Y,HUB_RADIUS-3,
-         a->dark_mode?0xff4b4a59u:0xfff5e8f2u);
-    unsigned offset=0;
-    for(unsigned i=0;i<sizeof cat_sprite_rle;i+=2){
-        unsigned count=cat_sprite_rle[i],index=cat_sprite_rle[i+1];
-        while(count--){
-            if(index){
-                int x=x0+(int)(offset%CAT_SPRITE_W)*CAT_SCALE;
-                int y=y0+(int)(offset/CAT_SPRITE_W)*CAT_SCALE;
-                box(p,stride,x,y,CAT_SCALE,CAT_SCALE,palette[index]);
-            }
-            ++offset;
-        }
-    }
-}
-static void rounded_rect(u32 *p,unsigned stride,int x,int y,int width,int height,
-                         int radius,u32 color){
-    for(int yy=y;yy<y+height;++yy)
-        for(int xx=x;xx<x+width;++xx)
-            if(rounded_hit(xx,yy,x,y,width,height,radius))
-                dot(p,stride,xx,yy,color);
-}
-static void render_pads(struct app *a,u32 *p,unsigned stride){
-    const u32 rim=0xff55505bu;
-    /* Cream surround and lavender border match the approved layout. */
-    rounded_rect(p,stride,BOARD_X-4,BOARD_Y-4,BOARD_W+8,BOARD_H+8,
-                 28,0xff514957u);
-    rounded_rect(p,stride,BOARD_X-2,BOARD_Y-2,BOARD_W+4,BOARD_H+4,
-                 26,0xfffff7f5u);
-    /* Pads are independently rounded, so the outer shell clips none of them. */
-    rounded_rect(p,stride,BOARD_X,BOARD_Y,BOARD_W,BOARD_H,25,rim);
-    for(int i=0;i<4;++i){
-        unsigned shine=a->shine[i];
-        if(a->phase==INPUT&&a->selected==i&&shine<60)shine=60;
-        u32 base=mix(colors[i],bright[i],shine);
-        rounded_rect(p,stride,px[i],py[i],PAD_W,PAD_H,PAD_RADIUS,base);
-        /* Simple highlights within the pad itself, preserving uniform shape. */
-        for(int yy=py[i]+8;yy<py[i]+13;++yy)
-            for(int xx=px[i]+20;xx<px[i]+PAD_W-20;++xx)
-                if(rounded_hit(xx,yy,px[i],py[i],PAD_W,PAD_H,PAD_RADIUS))
-                    dot(p,stride,xx,yy,mix(base,0xffffffffu,38+shine/7));
-        if(a->ripple_pad==i&&a->ripple_age){
-            unsigned age=a->ripple_age;
-            int radius=14+(int)age/12;
-            u32 ring=mix(base,bright[i],170*(430-age)/430);
-            for(int xx=cx[i]-radius;xx<=cx[i]+radius;++xx){
-                int dx=xx-cx[i],v=radius*radius-dx*dx;
-                int dy=0;
-                while((dy+1)*(dy+1)<=v)++dy;
-                if(hit(xx,cy[i]-dy)==i)dot(p,stride,xx,cy[i]-dy,ring);
-                if(hit(xx,cy[i]+dy)==i)dot(p,stride,xx,cy[i]+dy,ring);
-            }
-        }
-    }
-    cat(a,p,stride);
+void app_theme(struct app *a,const char *value){
+ struct theme *t=&a->theme,read={0};
+ if(value&&theme_read(&read,value)){
+  *t=read;
+  /* Classic's page is its paper; the others' is black, white in Light Mode, under the ink. */
+  t->bg=t->style==CLASSIC?t->box:luma(t->title)>127?0xff000000u:0xffffffffu;
+  t->panel=t->box;
+  a->dark_mode=luma(t->bg)<128;
+ }else if(a->dark_mode){
+  *t=(struct theme){OWN,0xff000000u,0xff111111u,0xff1c1c1cu,0xff3a3a3au,0xffffffffu,
+   0xffaaaaaau,0,0xfff07820u,0xffffffffu,{0},{0}};
+ }else{
+  *t=(struct theme){OWN,0xffffffffu,0xffeeeeeeu,0xfff2f2f2u,0xffc8c8c8u,0xff000000u,
+   0xff555555u,0,0xfff07820u,0xffffffffu,{0},{0}};
+ }
+ /* Q2 Pod's games caption their HUD in grey; Classic's rows are all ink, so grey it from them. */
+ t->muted=t->text!=t->title?t->text:mix(t->title,t->bg,110);
 }
 
-static void particles(struct app *a,u32 *p,unsigned st){
- if(!a->spark_age)return;
- unsigned age=850-a->spark_age;
- for(int k=0;k<22;++k){
-  unsigned seed=(unsigned)k*1664525u+1013904223u;
-  int dx=(int)(seed%231)-115,dy=(int)((seed>>11)%151)-75;
-  int x=187+dx*(int)age/700,y=174+dy*(int)age/700;
-  if(x>20&&x<355&&y>65&&y<265)
-   box(p,st,x,y,age<500?3:2,age<500?3:2,k%3?0xffd9bd78u:0xffffffffu);
+/* ---- painting: the panel is portrait, so logical (x, y) lands at x * stride + HEIGHT-1-y ---- */
+static void dot(u32 *p,unsigned st,int x,int y,u32 c){
+ if(x>=0&&x<WIDTH&&y>=0&&y<HEIGHT)p[x*st+HEIGHT-1-y]=c;
+}
+static void blend(u32 *p,unsigned st,int x,int y,u32 c,unsigned alpha){
+ if(x<0||x>=WIDTH||y<0||y>=HEIGHT||!alpha)return;
+ u32 *q=&p[x*st+HEIGHT-1-y];
+ *q=alpha>=255?c:mix(*q,c,alpha);
+}
+static void box(u32 *p,unsigned st,int x,int y,int w,int h,u32 c){
+ for(int i=x;i<x+w;++i)for(int j=y;j<y+h;++j)dot(p,st,i,j,c);
+}
+/* A rounded box, its corners anti-aliased from four samples a pixel; row i is rows[i], or the last
+ * of n past them. */
+static unsigned corner(int x,int y,int l,int t,int w,int h,int r){
+ unsigned n=0;
+ for(int k=0;k<4;++k){
+  int sx=4*x+1+(k&1)*2,sy=4*y+1+(k>>1)*2,L=4*l,T=4*t,R=4*r,W=4*w,H=4*h;
+  int cx=sx<L+R?L+R:sx>L+W-R?L+W-R:sx,cy=sy<T+R?T+R:sy>T+H-R?T+H-R:sy;
+  int dx=sx-cx,dy=sy-cy;
+  n+=dx*dx+dy*dy<=R*R;
+ }
+ return n;
+}
+static void rrect_rows(u32 *p,unsigned st,int x,int y,int w,int h,int r,const u32 *rows,int n){
+ for(int j=y;j<y+h;++j){
+  u32 c=rows[j-y<n?j-y:n-1];
+  for(int i=x;i<x+w;++i){
+   int edge=(i<x+r||i>=x+w-r)&&(j<y+r||j>=y+h-r);
+   unsigned k=edge?corner(i,j,x,y,w,h,r):4;
+   if(k)blend(p,st,i,j,c,k==4?255:k*64);
+  }
  }
 }
-void app_frame(struct app *a,u32 *p,unsigned stride,unsigned ms){
-    if(a->phase!=PAUSED)step(a,ms);
-    box(p,stride,0,0,WIDTH,HEIGHT,
-        a->dark_mode?0xff171923u:0xfff7f1e9u);
-    /* Compact title leaves room for a round label that is always readable. */
-    label(p,stride,"DIAMOND SAYS",16,2,
-        a->dark_mode?0xfff4edf3u:0xff3a333cu);
-    unsigned round=a->length?a->length:1;
-    char text[11]={'R','O','U','N','D',' ','0','0','0',0};
-    if(round<10){
-        text[6]=(char)('0'+round);
-        text[7]=0;
-    }else if(round<100){
-        text[6]=(char)('0'+round/10);
-        text[7]=(char)('0'+round%10);
-        text[8]=0;
-    }else{
-        text[6]=(char)('0'+round/100);
-        text[7]=(char)('0'+round/10%10);
-        text[8]=(char)('0'+round%10);
-    }
-    /* Soft pill backdrop. */
-    for(int y=46;y<76;++y){
-        int inset=0;
-        if(y<55)inset=55-y;
-        else if(y>66)inset=y-66;
-        box(p,stride,129+inset,y,117-2*inset,1,
-            a->dark_mode?0xff52475bu:0xffddd3ecu);
-    }
-    label(p,stride,text,53,2,
-        a->dark_mode?0xffffffffu:0xff403b56u);
-    render_pads(a,p,stride);
-    particles(a,p,stride);
-    /* Status has its own pill below the board; never obscure the mascot. */
-    const char *status=a->phase==READY?"CENTER TO START":
-        a->phase==SHOW?"WATCH THE PATTERN":
-        a->phase==INPUT?"YOUR TURN":
-        a->phase==CELEBRATE?"LEVEL UP":
-        a->phase==LOST?"TRY AGAIN":
-        a->phase==PAUSED?"CENTER RESUME":"YOU DID IT";
-    u32 bg=a->phase==LOST?0xffa83847u:
-        a->dark_mode?0xff484254u:0xffe7d6eeu;
-    u32 fg=a->phase==LOST||a->dark_mode?0xffffffffu:0xff403447u;
-    rounded_rect(p,stride,69,270,237,23,11,bg);
-    label(p,stride,status,275,2,fg);
-    unsigned done=a->phase==SHOW?a->shown:a->entered;
-    unsigned slots=a->length<14?a->length:14;
-    if(!slots)slots=1;
-    int start=(WIDTH-(int)slots*12)/2;
-    for(unsigned i=0;i<slots;++i){
-        unsigned index=a->length<=14?i:i*a->length/slots;
-        box(p,stride,start+(int)i*12,297,7,4,
-            index<done?0xffb494d8u:0xffd7cbd8u);
-    }
-    label(p,stride,a->sounds?"SOUND ON":"SOUND OFF",309,1,
-        a->dark_mode?0xffe1d9e7u:0xff766d78u);
+static void rrect(u32 *p,unsigned st,int x,int y,int w,int h,int r,u32 c){rrect_rows(p,st,x,y,w,h,r,&c,1);}
+/* A box in a hairline frame, as Q2 Pod's round_box and frame_rect draw a board. */
+static void framed(u32 *p,unsigned st,int x,int y,int w,int h,int r,u32 fill,u32 line){
+ rrect(p,st,x,y,w,h,r,line);
+ rrect(p,st,x+1,y+1,w-2,h-2,r-1,fill);
+}
+static void disc(u32 *p,unsigned st,int x,int y,int radius,u32 c){
+ rrect(p,st,x-radius,y-radius,2*radius,2*radius,radius,c);
+}
+static void dim(u32 *p,unsigned st){ /* black at half, as Q2 Pod dims a game under its pop-up */
+ for(int x=0;x<WIDTH;++x)for(int y=0;y<HEIGHT;++y){
+  u32 *q=&p[x*st+y];*q=0xff000000u|((*q>>1)&0x7f7f7fu);
+ }
+}
+
+/* Q2 Pod's caption face; Minimal sets every word in capitals, CAPS_TRACK apart. */
+static char shown(const struct app *a,char c){return a->theme.style==MINIMAL&&c>='a'&&c<='z'?(char)(c-32):c;}
+static int text_w(const struct app *a,const char *s){
+ int w=0,n=0;
+ for(;*s;++s){char c=shown(a,*s);if(c>=32&&c<127)w+=font_adv[c-32],++n;}
+ if(a->theme.style==MINIMAL&&n)w+=(n-1)*CAPS_TRACK;
+ return w;
+}
+static int text(const struct app *a,u32 *p,unsigned st,int x,int y,const char *s,u32 c){
+ int x0=x;
+ for(;*s;++s){
+  char ch=shown(a,*s);
+  if(ch<32||ch>126)continue;
+  int k=ch-32,w=font_adv[k];
+  const unsigned char *g=font_px+font_off[k];
+  for(int r=0;r<FONT_H;++r)for(int i=0;i<w;++i)blend(p,st,x+i,y+r,c,g[r*w+i]);
+  x+=w+(a->theme.style==MINIMAL?CAPS_TRACK:0);
+ }
+ return x-x0;
+}
+static void centred(const struct app *a,u32 *p,unsigned st,int cx,int y,const char *s,u32 c){
+ text(a,p,st,cx-text_w(a,s)/2,y,s,c);
+}
+static char *put(char *e,const char *s){while(*s)*e++=*s++;*e=0;return e;}
+static char *put_n(char *e,unsigned v){
+ char d[12];int n=0;
+ do d[n++]=(char)('0'+v%10),v/=10;while(v);
+ while(n)*e++=d[--n];
+ *e=0;return e;
+}
+
+/* "Round 3" at the left and "Best 7" at the right, the names grey, as Q2 Pod's hud(). */
+static void hud(struct app *a,u32 *p,unsigned st){
+ const struct theme *t=&a->theme;
+ char round[12],best[12];
+ put_n(round,a->length?a->length:1);put_n(best,a->best);
+ int x=HUD_X+text(a,p,st,HUD_X,HUD_Y,"Round",t->muted)+6;
+ text(a,p,st,x,HUD_Y,round,t->title);
+ x=WIDTH-HUD_X-text_w(a,best);
+ text(a,p,st,x,HUD_Y,best,t->title);
+ x-=6+text_w(a,"Best");
+ text(a,p,st,x,HUD_Y,"Best",t->muted);
+}
+
+/* The source image is reduced to a compact indexed sprite once at build time.
+ * Recolor its gray fills at runtime; black ink and pink ears remain consistent. */
+static void cat(struct app *a,u32 *p,unsigned st){
+ const int x0=HUB_X-CAT_SPRITE_W*CAT_SCALE/2,y0=HUB_Y-CAT_SPRITE_H*CAT_SCALE/2;
+ const u32 palette[6]={
+  0,
+  0xff28282du,                   /* outlines */
+  a->dark_mode?0xfff6f6f6u:0xffb0b0b0u,
+  a->dark_mode?0xffffffffu:0xfff7f7f7u,
+  0xffffabbdu,                   /* pink ears */
+  a->dark_mode?0xffdddddfu:0xff777777u
+ };
+ unsigned offset=0;
+ for(unsigned i=0;i<sizeof cat_sprite_rle;i+=2){
+  unsigned count=cat_sprite_rle[i],index=cat_sprite_rle[i+1];
+  while(count--){
+   if(index){
+    int x=x0+(int)(offset%CAT_SPRITE_W)*CAT_SCALE,y=y0+(int)(offset/CAT_SPRITE_W)*CAT_SCALE;
+    box(p,st,x,y,CAT_SCALE,CAT_SCALE,palette[index]);
+   }
+   ++offset;
+  }
+ }
+}
+/* Flat pads on a flat board: a lit pad brightens, the wheel's pick is ringed in the theme's ink (its
+ * accent can be a pad's own colour), and the cat sits in its own framed hub. No gloss, glow or gradient. */
+static void board(struct app *a,u32 *p,unsigned st){
+ const struct theme *t=&a->theme;
+ framed(p,st,BOARD_X,BOARD_Y,BOARD_W,BOARD_H,BOARD_RADIUS,t->panel,t->frame);
+ for(int i=0;i<4;++i){
+  u32 base=i==2&&a->dark_mode?0xff33363du:colors[i]; /* Black stays clear of a dark board */
+  if(a->phase==INPUT&&a->selected==i)
+   rrect(p,st,px[i]-3,py[i]-3,PAD_W+6,PAD_H+6,PAD_RADIUS+3,t->title);
+  rrect(p,st,px[i],py[i],PAD_W,PAD_H,PAD_RADIUS,mix(base,bright[i],a->shine[i]));
+ }
+ disc(p,st,HUB_X,HUB_Y,HUB_MOAT,t->panel);
+ disc(p,st,HUB_X,HUB_Y,HUB_RADIUS,t->frame);
+ disc(p,st,HUB_X,HUB_Y,HUB_RADIUS-1,mix(t->panel,t->frame,a->dark_mode?160:90));
+ cat(a,p,st);
+}
+/* Under the board: what to do now, then a dot for each step of the round, Home's dots. */
+static void status(struct app *a,u32 *p,unsigned st){
+ const struct theme *t=&a->theme;
+ const char *s=a->phase==SHOW?"Watch":a->phase==CELEBRATE?"Level up!":"Your turn";
+ centred(a,p,st,WIDTH/2,STATUS_Y,s,a->phase==CELEBRATE?t->pick:t->muted);
+ unsigned done=a->phase==SHOW?a->shown:a->phase==CELEBRATE?a->length:a->entered;
+ unsigned slots=a->length<14?a->length:14;
+ if(!slots)slots=1;
+ int x=(WIDTH-(int)slots*DOT_STEP+DOT_STEP-DOT)/2;
+ for(unsigned i=0;i<slots;++i){
+  unsigned index=a->length<=14?i:i*a->length/slots;
+  rrect(p,st,x+(int)i*DOT_STEP,DOTS_Y,DOT,DOT,DOT/2,index<done?t->title:t->frame);
+ }
+}
+
+/* Q2 Pod's pop-up (popup() in its games.c): a title, then a hint, or the rows with the chosen one
+ * as the theme draws its selection: Classic's band, Modern's accent bar, Minimal's dot. */
+static void popup_box(struct app *a,u32 *p,unsigned st,int y,int h,int chosen){
+ const struct theme *t=&a->theme;
+ if(t->style==CLASSIC){
+  u32 rows[HEIGHT];
+  int band=chosen>=0?menu_top(a)+chosen*POP_ROW:h;
+  for(int i=0;i<h;++i)
+   rows[i]=i>=band&&i<band+POP_ROW?t->band[i-band]:i<POP_ROW?t->head[i]:i==POP_ROW?t->frame:t->box;
+  rrect(p,st,POP_X-1,y-1,POP_W+2,h+2,13,t->frame);
+  rrect_rows(p,st,POP_X,y,POP_W,h,12,rows,h);
+ }else{
+  int r=t->style==MINIMAL?6:12;
+  framed(p,st,POP_X,y,POP_W,h,r,t->box,t->frame);
+ }
+}
+static int title_y(const struct app *a,int y){return y+(a->theme.style==CLASSIC?0:4)+(POP_ROW-FONT_H)/2;}
+static void popup_hint(struct app *a,u32 *p,unsigned st,const char *title,const char *hint){
+ const struct theme *t=&a->theme;
+ int h=POP_ROW+44,y=(HEIGHT-h)/2;
+ dim(p,st);
+ popup_box(a,p,st,y,h,-1);
+ centred(a,p,st,WIDTH/2,title_y(a,y),title,t->title);
+ int top=y+POP_ROW+(t->style==CLASSIC?1:2),room=h-(top-y);
+ centred(a,p,st,WIDTH/2,top+(room-FONT_H)/2,hint,t->muted);
+}
+static void popup_menu(struct app *a,u32 *p,unsigned st){
+ const struct theme *t=&a->theme;
+ int y=menu_y(a),h=menu_h(a);
+ char sound[16];put(put(sound,"Sound: "),a->sounds?"On":"Off");
+ const char *rows[MENU_ROWS]={"Continue",sound,"Quit"};
+ dim(p,st);
+ popup_box(a,p,st,y,h,a->choice);
+ centred(a,p,st,WIDTH/2,title_y(a,y),"Paused",t->title);
+ for(int i=0;i<MENU_ROWS;++i){
+  int ry=y+menu_top(a)+i*POP_ROW,on=i==a->choice,ty=ry+(POP_ROW-FONT_H)/2;
+  u32 ink=on?t->pick_text:t->text;
+  if(t->style==MINIMAL){
+   if(on)rrect(p,st,POP_X+DOT_X,ry+(POP_ROW-DOT)/2,DOT,DOT,DOT/2,t->pick);
+   text(a,p,st,POP_X+TEXT_X,ty,rows[i],ink);
+  }else if(t->style==CLASSIC){
+   text(a,p,st,POP_X+16,ty,rows[i],ink);
+  }else{
+   if(on)rrect(p,st,POP_X+10,ry+1,POP_W-20,POP_ROW-2,6,t->pick);
+   centred(a,p,st,WIDTH/2,ty,rows[i],ink);
+  }
+ }
+}
+
+void app_frame(struct app *a,u32 *p,unsigned st,unsigned ms){
+ const struct theme *t=&a->theme;
+ if(a->phase!=PAUSED)step(a,ms);
+ box(p,st,0,0,WIDTH,HEIGHT,t->bg);
+ hud(a,p,st);
+ board(a,p,st);
+ if(a->phase==READY)popup_hint(a,p,st,"Diamond Says","Centre: play");
+ else if(a->phase==LOST)popup_hint(a,p,st,a->record?"New best!":"Game over","Centre: play again");
+ else if(a->phase==FINISHED)popup_hint(a,p,st,"You did it!","Centre: play again");
+ else if(a->phase==PAUSED)popup_menu(a,p,st);
+ else status(a,p,st);
 }
 
 int app_animated(const struct app *a){
  if(a->phase==PAUSED)return 0;
- if(a->phase==SHOW||a->phase==CELEBRATE||a->spark_age||a->ripple_age||a->flash_age)return 1;
+ if(a->phase==SHOW||a->phase==CELEBRATE)return 1;
  for(int i=0;i<4;++i)if(a->shine[i])return 1;
  return 0;
 }

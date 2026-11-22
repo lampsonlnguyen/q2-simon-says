@@ -187,7 +187,20 @@ static void copy_page(u32 *dst, const u32 *src, unsigned stride)
             dst[x * stride + y] = src[x * stride + y];
 }
 
-int q2_main(void)
+/* Q2_POPUP's value from the environment, after argv's NULL; 0 on older firmware. */
+static const char *popup_theme(int argc, char **argv)
+{
+    for (char **e = argv + argc + 1; *e; ++e) {
+        const char *v = *e, *k = "Q2_POPUP=";
+        while (*k && *v == *k)
+            ++v, ++k;
+        if (!*k)
+            return v;
+    }
+    return 0;
+}
+
+int q2_main(int argc, char **argv)
 {
     unsigned var[40], fix[17];
     int fb = (int)sc(SYS_open, (long)"/dev/fb0", O_RDWR | O_CLOEXEC, 0, 0, 0, 0);
@@ -219,6 +232,7 @@ int q2_main(void)
         return 1;
     }
     app.dark_mode=theme_from_config();
+    app_theme(&app, popup_theme(argc, argv));
     unsigned visible = front;
     int can_pan = rows >= 2 * WIDTH && (front == 0 || front == WIDTH);
     struct { int fd; short events, revents; } poll_input = {input, 1, 0};
