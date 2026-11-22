@@ -62,6 +62,6 @@ make check
 make
 ```
 
-The installable package is `dist/q2-diamond-says.zip`. GitHub Actions tests and builds on every push and uploads an Actions artifact; every push to `main` also publishes the ZIP to the **latest** GitHub Release. Tagged versions (`v*`) publish versioned Releases.
+The installable package is `dist/q2-diamond-says.zip`. GitHub Actions tests and builds on every push and uploads an Actions artifact; every push to `main` also publishes the ZIP to the **latest** GitHub Release. Version tags (`1.2.0` or `v1.2.0`) publish versioned Releases.
 
 GPL-3.0-only. Original game code; no proprietary Simon audio or graphics.
