@@ -19,6 +19,12 @@ jobs:
       - name: Verify ZIP
         run: |
           unzip -t dist/q2-diamond-says.zip
+          for icon in icon.png icon-40.png pane.png; do
+            unzip -Z1 dist/q2-diamond-says.zip | grep -Fx ".diamond-says/$icon"
+          done
+          file dist/.diamond-says/icon.png | grep -F '52 x 52'
+          file dist/.diamond-says/icon-40.png | grep -F '40 x 40'
+          file dist/.diamond-says/pane.png | grep -F '96 x 96'
           unzip -p dist/q2-diamond-says.zip .diamond-says/q2app | grep -Fx 'game=1'
           file dist/.diamond-says/q2-diamond-says | grep -E 'ELF 32-bit LSB.*MIPS'
       - uses: actions/upload-artifact@v6

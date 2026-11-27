@@ -18,7 +18,11 @@ $(CARD)/q2app: q2app
 $(CARD)/LICENSE.txt: LICENSE
 	mkdir -p $(@D)
 	cp $< $@
-dist/q2-diamond-says.zip: $(CARD)/q2-diamond-says $(CARD)/q2app $(CARD)/LICENSE.txt
+$(CARD)/%.png: %.png
+	mkdir -p $(@D)
+	cp $< $@
+
+dist/q2-diamond-says.zip: $(CARD)/q2-diamond-says $(CARD)/q2app $(CARD)/LICENSE.txt $(CARD)/icon.png $(CARD)/icon-40.png $(CARD)/pane.png
 	cd dist && zip -q q2-diamond-says.zip $(patsubst dist/%,%,$^)
 build/check: tests/check.c src/app.c src/app.h src/font.h src/cat_sprite.h
 	mkdir -p $(@D)
